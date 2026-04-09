@@ -1413,7 +1413,15 @@ function switchView(viewName, fromFlowClick = false) {
       if(viewName === 'list') renderList();
     }
 
-    function updateAll() { updateStats(); renderSidebar(); renderList(); initFlowView(); }
+    function updateAll() { 
+    updateStats(); 
+    renderSidebar(); 
+    renderList(); 
+    initFlowView(); 
+    if (typeof saveUserData === 'function' && typeof currentUser !== 'undefined' && currentUser) {
+        saveUserData();
+    }
+}
     updateAll();
     window.addEventListener('resize', () => { if(document.getElementById('view-flow').classList.contains('active')) initFlowView(); });
   </script>
@@ -1448,9 +1456,12 @@ const uiConfig = {
         }
     },
     signInOptions: [
-        firebase.auth.EmailAuthProvider.PROVIDER_ID,
-        firebase.auth.GoogleAuthProvider.PROVIDER_ID
+        {
+            provider: firebase.auth.EmailAuthProvider.PROVIDER_ID,
+            requireDisplayName: false // Skips asking for first/last name
+        }
     ],
+    credentialHelper: firebaseui.auth.CredentialHelper.NONE, // Disables Google Smart Lock
     signInFlow: 'popup'
 };
 
