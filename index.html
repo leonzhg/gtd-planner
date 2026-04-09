@@ -207,6 +207,13 @@ input,textarea,select{font:inherit;color:inherit}
         <button class="btn-home" onclick="resetAll()">
           <i data-lucide="home"></i> Home View
         </button>
+        <button class="btn-home" onclick="exportBackup()" title="Export all tasks as a JSON backup file">
+          <i data-lucide="download"></i> Export
+        </button>
+        <button class="btn-home" onclick="document.getElementById('import-file-input').click()" title="Restore tasks from a JSON backup file">
+          <i data-lucide="upload"></i> Import
+        </button>
+        <input type="file" id="import-file-input" accept=".json" style="display:none" onchange="importBackup(event)">
         <div class="view-toggle">
           <button class="view-btn active" id="btn-list" onclick="switchView('list')">
             <i data-lucide="list"></i> List View
