@@ -172,8 +172,24 @@ input,textarea,select{font:inherit;color:inherit}
 .node-high-priority { animation: pulse-high-svg 2s infinite; stroke: var(--color-high) !important; }
 
 </style>
+
+<!-- Firebase SDKs -->
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+<!-- FirebaseUI for pre-built login boxes -->
+<script src="https://www.gstatic.com/firebasejs/ui/6.1.0/firebase-ui-auth.js"></script>
+<link type="text/css" rel="stylesheet" href="https://www.gstatic.com/firebasejs/ui/6.1.0/firebase-ui-auth.css" />
+
 </head>
 <body>
+
+<!-- Authentication UI Overlay -->
+<div id="auth-overlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--color-bg); z-index: 10000; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+    <h2 style="margin-bottom: 20px; font-weight: 600; color: var(--color-text);">Sign in to GTD Planner</h2>
+    <div id="firebaseui-auth-container"></div>
+</div>
+
   <div class="app">
     <!-- Topbar -->
     <div class="topbar">
@@ -183,6 +199,11 @@ input,textarea,select{font:inherit;color:inherit}
         </div>
       </div>
       <div class="topbar-right">
+
+<button class="btn-home" id="btn-logout" style="background: var(--color-surface-offset); color: var(--color-text-muted); display: none;">
+    <i data-lucide="log-out"></i> Logout
+</button>
+
         <button class="btn-home" onclick="resetAll()">
           <i data-lucide="home"></i> Home View
         </button>
@@ -488,7 +509,7 @@ input,textarea,select{font:inherit;color:inherit}
     };
 
     // GTD State with Projects and Due Dates
-    const state = {
+    let state = {
       archive: [
         { id: "t99", title: "Old Completed Task", priority: "low", time: 30, tags: [], done: true, archivedAt: "2026-03-15T10:00:00Z" }
       ],
@@ -1396,5 +1417,105 @@ function switchView(viewName, fromFlowClick = false) {
     updateAll();
     window.addEventListener('resize', () => { if(document.getElementById('view-flow').classList.contains('active')) initFlowView(); });
   </script>
+
+<script>
+// --- FIREBASE AUTH & DATABASE INTEGRATION ---
+// ⚠️ REPLACE THIS OBJECT WITH YOUR WEB CLIENT CONFIG FROM FIREBASE CONSOLE
+const firebaseConfig = {
+    apiKey: "PASTE_YOUR_WEB_API_KEY_HERE",
+    authDomain: "gtd-planner-154f1.firebaseapp.com",
+    projectId: "gtd-planner-154f1",
+    storageBucket: "gtd-planner-154f1.appspot.com",
+    messagingSenderId: "PASTE_YOUR_SENDER_ID_HERE",
+    appId: "PASTE_YOUR_APP_ID_HERE"
+};
+
+// Initialize Firebase
+if (!firebase.apps.length) {
+    firebase.initializeApp(firebaseConfig);
+}
+const auth = firebase.auth();
+const db = firebase.firestore();
+
+let currentUser = null;
+
+// Configure the login UI
+const ui = new firebaseui.auth.AuthUI(auth);
+const uiConfig = {
+    callbacks: {
+        signInSuccessWithAuthResult: function(authResult, redirectUrl) {
+            return false; // Prevent redirect, handle in-page
+        }
+    },
+    signInOptions: [
+        firebase.auth.EmailAuthProvider.PROVIDER_ID,
+        firebase.auth.GoogleAuthProvider.PROVIDER_ID
+    ],
+    signInFlow: 'popup'
+};
+
+// Listen for Login/Logout
+auth.onAuthStateChanged((user) => {
+    const overlay = document.getElementById('auth-overlay');
+    const logoutBtn = document.getElementById('btn-logout');
+
+    if (user) {
+        // User logged in
+        currentUser = user;
+        overlay.style.display = 'none';
+        logoutBtn.style.display = 'flex';
+        loadUserData(user.uid);
+    } else {
+        // User logged out
+        currentUser = null;
+        overlay.style.display = 'flex';
+        logoutBtn.style.display = 'none';
+        ui.start('#firebaseui-auth-container', uiConfig);
+    }
+});
+
+// Logout Button Logic
+document.getElementById('btn-logout').addEventListener('click', () => {
+    auth.signOut();
+});
+
+// Load tasks from Cloud Database
+function loadUserData(uid) {
+    db.collection('users').doc(uid).get().then((doc) => {
+        if (doc.exists) {
+            console.log("Loading tasks from cloud...");
+            state = doc.data().state; // Override local state with cloud state
+            if(typeof updateAll === 'function') updateAll();
+        } else {
+            console.log("New user, creating cloud save...");
+            saveUserData(); // Save default state for new user
+        }
+    }).catch((error) => {
+        console.error("Error loading user data:", error);
+    });
+}
+
+// Save tasks to Cloud Database
+function saveUserData() {
+    if (currentUser && typeof state !== 'undefined') {
+        db.collection('users').doc(currentUser.uid).set({
+            state: state,
+            lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
+        }).catch((error) => {
+            console.error("Error saving user data:", error);
+        });
+    }
+}
+
+// Intercept the original updateAll function so it saves to the cloud every time you modify a task
+if (typeof updateAll === 'function') {
+    const originalUpdateAll = updateAll;
+    window.updateAll = function() {
+        originalUpdateAll(); // Update the UI
+        saveUserData();      // Save changes to Firebase
+    };
+}
+</script>
+
 </body>
 </html>
