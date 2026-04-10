@@ -467,6 +467,21 @@ input,textarea,select{font:inherit;color:inherit}
         document.getElementById('project-title-input').focus();
     }
 
+    
+    function deleteProject(projId) {
+        if (!confirm('Delete this project?\n\nTasks linked to this project will remain but lose their project tag.')) return;
+        // Remove the project label
+        const projCat = state.categories.find(c => c.id === 'projects');
+        projCat.tasks = projCat.tasks.filter(p => p.id !== projId);
+        // Unlink tasks from this project across all categories
+        state.categories.forEach(cat => {
+            cat.tasks.forEach(task => {
+                if (task.projectId === projId) delete task.projectId;
+            });
+        });
+        updateAll();
+    }
+
     function saveProjectModal() {
         const title = document.getElementById('project-title-input').value.trim();
         if (!title) return;
@@ -517,53 +532,16 @@ input,textarea,select{font:inherit;color:inherit}
 
     // GTD State with Projects and Due Dates
     let state = {
-      archive: [
-        { id: "t99", title: "Old Completed Task", priority: "low", time: 30, tags: [], done: true, archivedAt: "2026-03-15T10:00:00Z" }
-      ],
+      archive: [],
       trash: [],
-      activeNav: "all", 
+      activeNav: "all",
       categories: [
-        {
-          id: "inbox", name: "Inbox",
-          tasks: [
-            { id: "t1", title: "Process unread emails", priority: "low", time: 15, done: false }
-          ]
-        },
-        {
-          id: "scheduled", name: "Scheduled (Calendar)",
-          tasks: [
-            { id: "t10", title: "Dentist Appointment", priority: "high", time: 60, done: false, dueDate: "2026-04-15" }
-          ]
-        },
-        {
-          id: "next-actions", name: "Next Actions",
-          tasks: [
-            { id: "t2", title: "Draft executive summary", priority: "high", tags: ["Work"], time: 60, done: false, projectId: "t6" },
-            { id: "t3", title: "Fix Leaky Faucet in Kitchen", priority: "med", tags: ["Home"], time: 45, done: false, projectId: "t7" },
-            { id: "t4", title: "Compile DB Schema notes", priority: "high", tags: ["Work"], time: 40, done: false, projectId: "t6" }
-          ]
-        },
-        {
-          id: "waiting", name: "Waiting For",
-          tasks: [
-            { id: "t5", title: "Approval from Legal on terms", priority: "med", tags: ["Work"], time: 10, done: false, projectId: "t6" }
-          ]
-        },
-        {
-          id: "projects", name: "Projects",
-          tasks: [
-            { id: "t6", title: "Client Onboarding Redesign", priority: "high", tags: ["Work"], time: 300, done: false },
-            { id: "t7", title: "Garage Organization", priority: "low", tags: ["Home"], time: 240, done: false },
-            { id: "t11", title: "Write Novel", priority: "med", tags: ["Personal"], time: 600, done: false } // No next actions!
-          ]
-        },
-        {
-          id: "someday", name: "Someday/Maybe",
-          tasks: [
-            { id: "t8", title: "Learn Rust Programming", priority: "low", time: 600, done: false },
-            { id: "t9", title: "Build Homelab", priority: "med", time: 400, done: false }
-          ]
-        }
+        { id: "inbox",        name: "Inbox",                 tasks: [] },
+        { id: "scheduled",    name: "Scheduled (Calendar)",  tasks: [] },
+        { id: "next-actions", name: "Next Actions",          tasks: [] },
+        { id: "waiting",      name: "Waiting For",           tasks: [] },
+        { id: "projects",     name: "Projects",              tasks: [] },
+        { id: "someday",      name: "Someday/Maybe",         tasks: [] }
       ]
     };
 
@@ -891,6 +869,40 @@ input,textarea,select{font:inherit;color:inherit}
         html += `<div class="tasks-grid" id="grid-${cat.id}" data-cat="${cat.id}">`;
         if (cat.tasks.length === 0 && !isProjectView && !isArchiveView && !isTrashView) html += `<div style="color:var(--color-text-faint); font-size:var(--text-xs); padding:var(--space-2)">No tasks in this list.</div>`;
         if (cat.tasks.length === 0 && isTrashView) html += `<div style="color:var(--color-text-faint); font-size:var(--text-xs); padding:var(--space-2)">Trash is empty.</div>`;
+
+        // Projects category: render folder cards, not task items
+        if (cat.id === 'projects' && !isProjectView && !isArchiveView && !isTrashView) {
+          if (cat.tasks.length === 0) {
+            html += `<div style="color:var(--color-text-faint); font-size:var(--text-xs); padding:var(--space-2)">No projects yet. Click "+ Add Project" to create one.</div>`;
+          }
+          cat.tasks.forEach(proj => {
+            const taskCount = state.categories
+              .filter(c => c.id !== 'projects')
+              .reduce((acc, c) => acc + c.tasks.filter(t => t.projectId === proj.id).length, 0);
+            const doneCount = state.categories
+              .filter(c => c.id !== 'projects')
+              .reduce((acc, c) => acc + c.tasks.filter(t => t.projectId === proj.id && t.done).length, 0);
+            html += `
+              <div class="task-card" style="border-left:3px solid ${categoryColors['projects'] || '#4f98a3'}; cursor:pointer;" onclick="setNavFilter('project-${proj.id}')">
+                <div style="display:flex;align-items:center;gap:var(--space-2);color:var(--color-primary);flex-shrink:0;">
+                  <i data-lucide="folder" style="width:20px;height:20px;"></i>
+                </div>
+                <div class="task-content">
+                  <div class="task-title">${proj.title}</div>
+                  <div class="task-meta">
+                    <span class="task-tag">${taskCount} task${taskCount !== 1 ? 's' : ''}</span>
+                    ${doneCount > 0 ? `<span class="task-tag" style="background:var(--color-primary-highlight);color:var(--color-primary);">${doneCount} done</span>` : ''}
+                  </div>
+                </div>
+                <div class="task-actions" style="opacity:1;">
+                  <button class="action-btn" onclick="event.stopPropagation(); openProjectModal('${proj.id}')" title="Edit Project Name"><i data-lucide="edit-2" style="width:16px;height:16px;"></i></button>
+                  <button class="action-btn" onclick="event.stopPropagation(); deleteProject('${proj.id}')" title="Delete Project"><i data-lucide="trash-2" style="width:16px;height:16px;color:var(--color-high);"></i></button>
+                </div>
+              </div>`;
+          });
+          html += '</div>'; // close tasks-grid
+          return; // skip normal task rendering for this category
+        }
 
         cat.tasks.forEach(task => {
           const priorityClass = task.priority === 'high' ? 'priority-high' : (task.priority === 'med' ? 'priority-med' : 'priority-low');
@@ -1533,6 +1545,70 @@ if (typeof updateAll === 'function') {
         saveUserData();      // Save changes to Firebase
     };
 }
+
+// ── EXPORT: Download current in-memory state as JSON backup ─────
+function exportBackup() {
+    const backupData = {
+        exportedAt: new Date().toISOString(),
+        exportedBy: (currentUser && currentUser.email) ? currentUser.email : 'unknown',
+        version: 'gtd-planner-v38',
+        state: state
+    };
+    const json = JSON.stringify(backupData, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const date = new Date().toISOString().slice(0, 10);
+    a.href = url;
+    a.download = 'gtd-backup-' + date + '.json';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function() { document.body.removeChild(a); URL.revokeObjectURL(url); }, 100);
+    if (typeof showToast === 'function') showToast('Backup downloaded: gtd-backup-' + date + '.json', {});
+}
+
+// ── IMPORT: Restore state from a JSON backup file ────────────────
+function importBackup(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        try {
+            const data = JSON.parse(e.target.result);
+            const restoredState = data.state || data;
+
+            if (!restoredState.categories || !Array.isArray(restoredState.categories)) {
+                alert('Invalid backup file.\nPlease select a file exported from GTD Planner.');
+                event.target.value = '';
+                return;
+            }
+
+            const exportDate = data.exportedAt
+                ? new Date(data.exportedAt).toLocaleString()
+                : 'unknown date';
+            const exportUser = data.exportedBy ? ' by ' + data.exportedBy : '';
+
+            const confirmed = confirm(
+                'Restore backup from ' + exportDate + exportUser + '?\n\n' +
+                'This will REPLACE all your current tasks with the backup.\n' +
+                'Your current data will be overwritten in the cloud too.'
+            );
+
+            if (confirmed) {
+                state = restoredState;
+                updateAll(); // re-renders UI and triggers saveUserData() via the intercept
+
+                if (typeof showToast === 'function') showToast('Backup restored successfully!', {});
+            }
+        } catch (err) {
+            alert('Could not read backup file.\nMake sure it is a valid GTD Planner JSON export.');
+        }
+        event.target.value = ''; // reset so same file can be re-imported
+    };
+    reader.readAsText(file);
+}
+
 </script>
 
 </body>
