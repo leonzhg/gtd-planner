@@ -882,7 +882,7 @@ input,textarea,select{font:inherit;color:inherit}
                     <i data-lucide="edit-2" style="width:16px;height:16px;"></i>
                   </button>
                 </h2>
-                <button class="btn-add" onclick="openModal('${cat.id}')"><i data-lucide="plus"></i> Add Task</button>
+                <button class="btn-add" onclick="${cat.id === 'projects' ? 'openProjectModal()' : `openModal('${cat.id}')`}"><i data-lucide="plus"></i> ${cat.id === 'projects' ? 'Add Project' : 'Add Task'}</button>
               </div>`;
         } else if (isProjectView) {
             html += `<h3 style="font-size:var(--text-xs); color:var(--color-text-muted); margin-top:var(--space-6); margin-bottom:var(--space-2); text-transform:uppercase; letter-spacing:0.05em;">${cat.name}</h3>`;
