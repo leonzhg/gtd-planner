@@ -239,6 +239,12 @@ input,textarea,select{font:inherit;color:inherit}
         <button class="btn-home" onclick="resetAll()">
           <i data-lucide="home"></i> Home View
         </button>
+        <button class="btn-home" onclick="openHistoryModal()" title="View and restore past versions">
+          <i data-lucide="history"></i> History
+        </button>
+        <button class="btn-home" onclick="openShareModal()" title="Export view to PDF, Email, or Text">
+          <i data-lucide="share"></i> Share
+        </button>
         <button class="btn-home" onclick="exportBackup()" title="Export all tasks as a JSON backup file">
           <i data-lucide="download"></i> Export
         </button>
@@ -446,6 +452,42 @@ input,textarea,select{font:inherit;color:inherit}
 
   <!-- Flow Tooltip -->
   <div id="flow-tooltip" style="position:absolute; display:none; background:var(--color-surface); border:1px solid var(--color-border); padding:8px 12px; border-radius:var(--radius-md); box-shadow:var(--shadow-md); pointer-events:none; z-index:1000; font-size:var(--text-xs); font-weight:500; color:var(--color-text); min-width:120px;"></div>
+  
+  <!-- History Modal -->
+  <div class="modal-overlay" id="history-modal">
+    <div class="modal" style="width: 600px;">
+      <h3><i data-lucide="history"></i> Version History</h3>
+      <div class="review-text">
+        View and restore automatic and manual cloud snapshots of your data.
+        <button class="btn-secondary" style="margin-top: 8px; display: block;" onclick="createManualSnapshot()"><i data-lucide="save" style="width:14px;height:14px;"></i> Save Current Version Now</button>
+      </div>
+      <div class="review-list" id="history-list" style="max-height: 250px; overflow-y: auto;">
+        <div style="padding: 10px; text-align: center; color: var(--color-text-muted);">Loading history...</div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" onclick="closeModal('history-modal')">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Share Modal -->
+  <div class="modal-overlay" id="share-modal">
+    <div class="modal" style="width: 400px;">
+      <h3><i data-lucide="share"></i> Share / Export View</h3>
+      <div class="review-text">
+        Export your active tasks into a clean, readable format.
+      </div>
+      <div style="display: flex; flex-direction: column; gap: var(--space-3); margin-top: var(--space-4);">
+        <button class="btn-secondary" style="justify-content: center; padding: 12px; display: flex; align-items: center; gap: 8px;" onclick="printToPDF()"><i data-lucide="printer" style="width:16px;height:16px;"></i> Print / Save as PDF</button>
+        <button class="btn-secondary" style="justify-content: center; padding: 12px; display: flex; align-items: center; gap: 8px;" onclick="sendViaEmail()"><i data-lucide="mail" style="width:16px;height:16px;"></i> Send via Email</button>
+        <button class="btn-secondary" style="justify-content: center; padding: 12px; display: flex; align-items: center; gap: 8px;" onclick="copyAsText()"><i data-lucide="clipboard" style="width:16px;height:16px;"></i> Copy as Text</button>
+      </div>
+      <div class="modal-actions" style="margin-top: 24px;">
+        <button class="btn-secondary" onclick="closeModal('share-modal')">Close</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Toast Container -->
   <div class="toast-container" id="toast-container"></div>
 
@@ -1822,12 +1864,7 @@ function saveUserData() {
 }
 
 // Intercept the original updateAll function so it saves to the cloud every time you modify a task
-if (typeof updateAll === 'function') {
-    const originalUpdateAll = updateAll;
-    window.updateAll = function() {
-        originalUpdateAll(); // Update the UI
-        saveUserData();      // Save changes to Firebase
-    };
+if (typeof updateAll === 'function') {;
 }
 
 // ── EXPORT: Download current in-memory state as JSON backup ─────
@@ -1852,6 +1889,166 @@ function exportBackup() {
 }
 
 // ── IMPORT: Restore state from a JSON backup file ────────────────
+
+// --- HISTORY & SHARE LOGIC ---
+function openHistoryModal() {
+    document.getElementById('history-modal').classList.add('active');
+    loadHistoryList();
+    if(typeof lucide !== "undefined") lucide.createIcons();
+}
+
+function openShareModal() {
+    document.getElementById('share-modal').classList.add('active');
+if(typeof lucide !== "undefined") lucide.createIcons();
+}
+
+function createManualSnapshot() {
+    if (!currentUser) return showToast('Please sign in to save cloud history.');
+    db.collection('users').doc(currentUser.uid).collection('snapshots').add({
+        state: state,
+        savedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        reason: 'manual_save'
+    }).then(() => {
+        showToast('Version saved successfully!');
+        loadHistoryList();
+    }).catch(e => {
+        console.error(e);
+        showToast('Error saving version.');
+    });
+}
+
+function loadHistoryList() {
+    if (!currentUser) {
+        document.getElementById('history-list').innerHTML = '<div style="padding:10px;">Please sign in to view history.</div>';
+        return;
+    }
+
+    db.collection('users').doc(currentUser.uid).collection('snapshots')
+      .orderBy('savedAt', 'desc')
+      .limit(15)
+      .get()
+      .then(snapshot => {
+          const list = document.getElementById('history-list');
+          if (snapshot.empty) {
+              list.innerHTML = '<div style="padding:10px; color:var(--color-text-muted);">No history snapshots found.</div>';
+              return;
+          }
+
+          let html = '';
+          snapshot.forEach(doc => {
+              const data = doc.data();
+              const dateStr = data.savedAt ? data.savedAt.toDate().toLocaleString() : 'Unknown Date';
+              const reason = data.reason || 'auto_backup';
+              html += `<div class="review-list-item" style="display:flex; justify-content:space-between; align-items:center;">
+                  <div>
+                    <strong>${dateStr}</strong>
+                    <div style="font-size: 11px; color: var(--color-text-faint);">${reason}</div>
+                  </div>
+                  <button class="btn-add" onclick="restoreSnapshot('${doc.id}')">Restore</button>
+              </div>`;
+          });
+          list.innerHTML = html;
+      }).catch(e => {
+          console.error(e);
+          document.getElementById('history-list').innerHTML = '<div style="padding:10px; color:var(--color-high);">Error loading history.</div>';
+      });
+}
+
+function restoreSnapshot(docId) {
+    if(!confirm("Are you sure you want to restore this version?\nYour current tasks will be overwritten.")) return;
+
+    db.collection('users').doc(currentUser.uid).collection('snapshots').doc(docId).get().then(doc => {
+        if (doc.exists) {
+            const data = doc.data();
+            let restoredState = data.state;
+            if (typeof migrateStateSchema === 'function') restoredState = migrateStateSchema(restoredState);
+            state = restoredState;
+            updateAll();
+            closeModal('history-modal');
+            showToast('History restored successfully!');
+        }
+    }).catch(e => {
+        console.error(e);
+        showToast('Error restoring history.');
+    });
+}
+
+function generateReadableText() {
+    let text = "GTD Planner - Active Tasks\n\n";
+    state.categories.forEach(cat => {
+        if(cat.id === 'projects') return;
+        const activeTasks = cat.tasks.filter(t => !t.done);
+        if(activeTasks.length > 0) {
+            text += `=== ${cat.name.toUpperCase()} ===\n`;
+            activeTasks.forEach(t => {
+                let prio = t.priority ? `[${t.priority.toUpperCase()}] ` : '';
+                let projStr = '';
+                if (t.projectId) {
+                    const pCat = state.categories.find(c => c.id === 'projects');
+                    if (pCat) {
+                        const p = pCat.tasks.find(x => x.id === t.projectId);
+                        if (p) projStr = ` (Project: ${p.title})`;
+                    }
+                }
+                text += `- ${prio}${t.title}${projStr}\n`;
+            });
+            text += `\n`;
+        }
+    });
+    return text;
+}
+
+function generatePrintHTML() {
+    const text = generateReadableText();
+    const htmlBody = text
+        .replace(/=== (.*?) ===/g, '<h2 style="color:#01696f; margin-top:20px; border-bottom:1px solid #ccc; padding-bottom:4px;">$1</h2>')
+        .replace(/\n/g, '<br>')
+        .replace(/- \[(.*?)\] (.*)/g, '<div style="margin-bottom:8px;"><strong>[$1]</strong> $2</div>')
+        .replace(/- (.*)/g, '<div style="margin-bottom:8px;">$1</div>');
+
+    return `
+    <html>
+    <head>
+        <title>GTD Planner Print View</title>
+        <style>
+            body { font-family: 'Inter', sans-serif; padding: 40px; max-width: 800px; margin: 0 auto; color: #333; line-height: 1.5; }
+            @media print { body { padding: 0; } }
+        </style>
+    </head>
+    <body>
+        <h1>GTD Planner</h1>
+        <p>Generated on: ${new Date().toLocaleString()}</p>
+        ${htmlBody}
+        <scr' + 'ipt>window.onload = function() { window.print(); }</scr' + 'ipt>
+    </body>
+    </html>`;
+}
+
+function printToPDF() {
+    const win = window.open('', '_blank');
+    win.document.write(generatePrintHTML());
+    win.document.close();
+}
+
+function sendViaEmail() {
+    const text = generateReadableText();
+    const subject = encodeURIComponent("GTD Planner - Task Summary");
+    const body = encodeURIComponent(text);
+    window.location.href = `mailto:?subject=${subject}&body=${body}`;
+}
+
+function copyAsText() {
+    const text = generateReadableText();
+    navigator.clipboard.writeText(text).then(() => {
+        showToast("Copied to clipboard!");
+    }).catch(err => {
+        console.error('Could not copy text: ', err);
+        showToast("Failed to copy.");
+    });
+}
+// --- END HISTORY & SHARE LOGIC ---
+
+
 function importBackup(event) {
     const file = event.target.files[0];
     if (!file) return;
