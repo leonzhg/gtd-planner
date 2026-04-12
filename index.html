@@ -440,6 +440,10 @@ input,textarea,select{font:inherit;color:inherit}
         <label>Project Name</label>
         <input type="text" id="project-title-input" placeholder="e.g. Website Redesign">
       </div>
+      <div class="form-group">
+        <label>Estimated Time (minutes)</label>
+        <input type="number" id="project-time-input" value="60" min="5" step="5">
+      </div>
       <div class="modal-actions">
         <button class="btn-secondary" onclick="closeModal('project-modal')">Cancel</button>
         <button class="btn-primary" onclick="saveProjectModal()">Save Project</button>
@@ -458,7 +462,7 @@ input,textarea,select{font:inherit;color:inherit}
     <div class="modal" style="width: 600px;">
       <h3><i data-lucide="history"></i> Version History</h3>
       <div class="review-text">
-        View and restore automatic and manual cloud snapshots of your data.
+        View and restore automatic and manual saved versions of your data.
         <button class="btn-secondary" style="margin-top: 8px; display: block;" onclick="createManualSnapshot()"><i data-lucide="save" style="width:14px;height:14px;"></i> Save Current Version Now</button>
       </div>
       <div class="review-list" id="history-list" style="max-height: 250px; overflow-y: auto;">
@@ -576,6 +580,7 @@ input,textarea,select{font:inherit;color:inherit}
         editingProjectId = null;
         document.getElementById('project-modal-title').innerHTML = '<i data-lucide="folder-tree"></i> New Project';
         document.getElementById('project-title-input').value = '';
+        document.getElementById('project-time-input').value = 60;
         document.getElementById('project-modal').classList.add('active');
         document.getElementById('project-title-input').focus();
     }
@@ -588,6 +593,7 @@ input,textarea,select{font:inherit;color:inherit}
 
         document.getElementById('project-modal-title').innerHTML = '<i data-lucide="edit-2"></i> Edit Project Name';
         document.getElementById('project-title-input').value = proj.title;
+        document.getElementById('project-time-input').value = proj.time || 60;
         document.getElementById('project-modal').classList.add('active');
         document.getElementById('project-title-input').focus();
     }
@@ -609,18 +615,22 @@ input,textarea,select{font:inherit;color:inherit}
 
     function saveProjectModal() {
         const title = document.getElementById('project-title-input').value.trim();
+        const time = parseInt(document.getElementById('project-time-input').value, 10) || 60;
         if (!title) return;
 
         const projCat = state.categories.find(c => c.id === 'projects');
 
         if (editingProjectId) {
             const proj = projCat.tasks.find(p => p.id === editingProjectId);
-            if (proj) proj.title = title;
+            if (proj) {
+                proj.title = title;
+                proj.time = time;
+            }
         } else {
             projCat.tasks.push({
                 id: "t" + Date.now(),
                 title: title,
-                time: 60,
+                time: time,
                 priority: "q2",
                 tags: ["Project"],
                 done: false
@@ -657,7 +667,8 @@ input,textarea,select{font:inherit;color:inherit}
 
     // GTD State with Projects and Due Dates
     let state = {
-      schemaVersion: 1,
+      schemaVersion: 2,
+      sortMode: "deadline",
       archive: [],
       trash: [],
       activeNav: "all",
@@ -924,6 +935,33 @@ input,textarea,select{font:inherit;color:inherit}
       lucide.createIcons();
     }
 
+    function getPriorityRank(priority) {
+      const map = { q1: 1, q2: 2, q3: 3, q4: 4, '': 5, null: 5, undefined: 5 };
+      return map[priority] || 5;
+    }
+
+    function getDueRank(task) {
+      if (!task || !task.dueDate) return Number.MAX_SAFE_INTEGER;
+      const t = new Date(task.dueDate + 'T23:59:59').getTime();
+      return Number.isFinite(t) ? t : Number.MAX_SAFE_INTEGER;
+    }
+
+    function sortTasksForDisplay(tasks, catId, sourceType = 'active') {
+      const arr = [...(tasks || [])];
+      if (sourceType === 'archive') return arr.sort((a,b) => (b.archivedAt || '').localeCompare(a.archivedAt || ''));
+      if (sourceType === 'trash') return arr;
+      return arr.sort((a,b) => {
+        if (!!a.done !== !!b.done) return a.done ? 1 : -1;
+        const dueDiff = getDueRank(a) - getDueRank(b);
+        if (dueDiff !== 0) return dueDiff;
+        const priDiff = getPriorityRank(a.priority) - getPriorityRank(b.priority);
+        if (priDiff !== 0) return priDiff;
+        const timeDiff = (a.time || 0) - (b.time || 0);
+        if (timeDiff !== 0) return timeDiff;
+        return (a.title || '').localeCompare(b.title || '');
+      });
+    }
+
     function renderList() {
       const target = document.getElementById('list-render-target');
       let html = '';
@@ -981,7 +1019,7 @@ input,textarea,select{font:inherit;color:inherit}
              </div>
           </div>
           <div class="section-header" style="margin-top: var(--space-4);">
-            <h2 class="section-title"><i data-lucide="list"></i> ${isPriorityFilter ? getPriorityMeta(priorityTarget==='unassigned' ? '' : priorityTarget).label : 'All Tasks'}</h2>
+            <h2 class="section-title"><i data-lucide="list"></i> ${isPriorityFilter ? getPriorityMeta(priorityTarget==='unassigned' ? '' : priorityTarget).label : 'All Tasks'} <span class="task-tag" style="margin-left:8px;">Sorted by deadline</span></h2>
           </div>
           `;
       }
@@ -1037,6 +1075,7 @@ input,textarea,select{font:inherit;color:inherit}
       if (window.cameFromFlow) {
           html += `<button class="btn-secondary" style="margin-bottom:var(--space-4); display:flex; align-items:center; gap:var(--space-2); background:var(--color-primary-highlight); color:var(--color-primary); border:none;" onclick="switchView('flow')"><i data-lucide="arrow-left" style="width:16px;height:16px;"></i> Return to Flow View</button>`;
       }
+      catsToRender = catsToRender.map(cat => ({ ...cat, tasks: sortTasksForDisplay(cat.tasks, cat.id, cat.id === 'archive' ? 'archive' : (cat.id === 'trash' ? 'trash' : 'active')) }));
       catsToRender.forEach(cat => {
         if (!isProjectView && !isArchiveView && !isTrashView) {
             html += `
@@ -1524,38 +1563,14 @@ input,textarea,select{font:inherit;color:inherit}
              document.getElementById("flow-tooltip").style.display = "none";
 
              if (!d.children) {
-                // Clicked a child task
+                // Clicked a child task: keep user in Flow View and zoom to its parent group
                 window.lastFlowFocusId = d.parent ? (d.parent.data.id || d.parent.data.taskId) : null;
-                switchView('list', true);
-                if (d.data.projectId || (d.parent && d.parent.data.id === 'projects')) {
-                    const pid = d.data.projectId || d.parent.data.taskId;
-                    setNavFilter('project-' + pid);
-                } else {
-                    setNavFilter(d.data.catId);
-                }
-                setTimeout(() => {
-                  const el = document.getElementById('task-' + d.data.taskId);
-                  if(el) {
-                    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    const oldBg = el.style.backgroundColor;
-                    el.style.backgroundColor = "var(--color-surface-offset)";
-                    el.style.boxShadow = `0 0 0 2px ${d.data.color}`;
-                    setTimeout(() => { el.style.backgroundColor = oldBg; el.style.boxShadow = ""; }, 1500);
-                  }
-                }, 50);
+                if (d.parent) window.zoomToNode(d.parent);
              } else {
-                // Clicked a parent grouping circle
-                if (flowFocus === d) {
-                    // Already in focus! Go to list view for this group
-                    window.lastFlowFocusId = d.data.id || d.data.taskId;
-                    switchView('list', true);
-                    if (d.data.catId === 'projects') {
-                        setNavFilter('project-' + d.data.taskId);
-                    } else {
-                        setNavFilter(d.data.id);
-                    }
+                // Clicked a parent grouping circle: toggle zoom only, do not force List View
+                if (flowFocus === d && d.parent) {
+                    window.zoomToNode(d.parent);
                 } else {
-                    // Zoom into it
                     window.zoomToNode(d);
                 }
              }
@@ -1635,15 +1650,23 @@ function migrateStateSchema(inputState) {
         if (typeof task.priority === 'undefined') task.priority = '';
         delete task.eisenhower;
       };
-      if (Array.isArray(inputState.categories)) {
-        inputState.categories.forEach(cat => (cat.tasks || []).forEach(migrateTask));
-      }
+      if (Array.isArray(inputState.categories)) inputState.categories.forEach(cat => (cat.tasks || []).forEach(migrateTask));
       if (Array.isArray(inputState.archive)) inputState.archive.forEach(migrateTask);
       if (Array.isArray(inputState.trash)) inputState.trash.forEach(migrateTask);
-
       inputState.schemaVersion = 1;
+      version = 1;
   }
 
+  if (version < 2) {
+      if (!inputState.sortMode) inputState.sortMode = 'deadline';
+      inputState.schemaVersion = 2;
+      version = 2;
+  }
+
+  if (!inputState.sortMode) inputState.sortMode = 'deadline';
+  if (!Array.isArray(inputState.archive)) inputState.archive = [];
+  if (!Array.isArray(inputState.trash)) inputState.trash = [];
+  if (typeof inputState.activeNav === 'undefined') inputState.activeNav = 'all';
   return inputState;
 }
 
@@ -1817,34 +1840,38 @@ document.getElementById('btn-logout').addEventListener('click', () => {
 });
 
 // Load tasks from Cloud Database
-const CURRENT_SCHEMA_VERSION = 1;
+const CURRENT_SCHEMA_VERSION = 2;
+let versionHistoryCache = [];
+const MAX_HISTORY_VERSIONS = 25;
 
 function loadUserData(uid) {
     db.collection('users').doc(uid).get().then((doc) => {
         if (doc.exists) {
             console.log("Loading tasks from cloud...");
-            let cloudState = doc.data().state;
-            let cloudVersion = cloudState.schemaVersion || 0;
-
+            const payload = doc.data() || {};
+            let cloudState = payload.state || null;
+            versionHistoryCache = Array.isArray(payload.versionHistory) ? payload.versionHistory : [];
+            if (!cloudState) {
+                cloudState = migrateStateSchema(JSON.parse(JSON.stringify(state)));
+            }
+            const cloudVersion = cloudState.schemaVersion || 0;
             if (cloudVersion < CURRENT_SCHEMA_VERSION) {
-                console.log(`Migrating state from v${cloudVersion} to v${CURRENT_SCHEMA_VERSION}...`);
-                // Save a pre-migration snapshot to protect user data
-                db.collection('users').doc(uid).collection('snapshots').add({
-                    state: cloudState, // Raw unmigrated state
-                    savedAt: firebase.firestore.FieldValue.serverTimestamp(),
-                    reason: `pre_migration_v${CURRENT_SCHEMA_VERSION}`
-                }).then(() => {
-                    console.log("Pre-migration snapshot safely stored in Firebase.");
-                }).catch(e => console.error("Failed to save pre-migration snapshot:", e));
-
+                versionHistoryCache = [{
+                    state: JSON.parse(JSON.stringify(cloudState)),
+                    savedAtIso: new Date().toISOString(),
+                    reason: `pre_migration_v${CURRENT_SCHEMA_VERSION}`,
+                    schemaVersion: cloudVersion
+                }, ...versionHistoryCache].slice(0, MAX_HISTORY_VERSIONS);
+                cloudState = migrateStateSchema(cloudState);
+            } else {
                 cloudState = migrateStateSchema(cloudState);
             }
-
-            state = cloudState; // Override local state with fully migrated cloud state
+            state = cloudState;
             if(typeof updateAll === 'function') updateAll();
         } else {
             console.log("New user, creating cloud save...");
-            saveUserData(); // Save default state for new user
+            versionHistoryCache = [];
+            saveUserData();
         }
     }).catch((error) => {
         console.error("Error loading user data:", error);
@@ -1856,8 +1883,9 @@ function saveUserData() {
     if (currentUser && typeof state !== 'undefined') {
         db.collection('users').doc(currentUser.uid).set({
             state: state,
+            versionHistory: Array.isArray(versionHistoryCache) ? versionHistoryCache : [],
             lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
-        }).catch((error) => {
+        }, { merge: true }).catch((error) => {
             console.error("Error saving user data:", error);
         });
     }
@@ -1891,97 +1919,87 @@ function exportBackup() {
 // ── IMPORT: Restore state from a JSON backup file ────────────────
 
 // --- HISTORY & SHARE LOGIC ---
+function cloneStateForHistory() {
+    return JSON.parse(JSON.stringify(state));
+}
+
+function pushHistoryVersion(reason = 'manual_save') {
+    const snapshot = {
+        state: cloneStateForHistory(),
+        savedAtIso: new Date().toISOString(),
+        reason: reason,
+        schemaVersion: CURRENT_SCHEMA_VERSION
+    };
+    versionHistoryCache = [snapshot, ...(Array.isArray(versionHistoryCache) ? versionHistoryCache : [])].slice(0, MAX_HISTORY_VERSIONS);
+}
+
 function openHistoryModal() {
     document.getElementById('history-modal').classList.add('active');
     loadHistoryList();
-    if(typeof lucide !== "undefined") lucide.createIcons();
+    if(typeof lucide !== 'undefined') lucide.createIcons();
 }
 
 function openShareModal() {
     document.getElementById('share-modal').classList.add('active');
-if(typeof lucide !== "undefined") lucide.createIcons();
+    if(typeof lucide !== 'undefined') lucide.createIcons();
 }
 
 function createManualSnapshot() {
     if (!currentUser) return showToast('Please sign in to save cloud history.');
-    db.collection('users').doc(currentUser.uid).collection('snapshots').add({
-        state: state,
-        savedAt: firebase.firestore.FieldValue.serverTimestamp(),
-        reason: 'manual_save'
-    }).then(() => {
-        showToast('Version saved successfully!');
-        loadHistoryList();
-    }).catch(e => {
-        console.error(e);
-        showToast('Error saving version.');
-    });
+    pushHistoryVersion('manual_save');
+    saveUserData();
+    showToast('Version saved successfully!');
+    loadHistoryList();
 }
 
 function loadHistoryList() {
+    const list = document.getElementById('history-list');
     if (!currentUser) {
-        document.getElementById('history-list').innerHTML = '<div style="padding:10px;">Please sign in to view history.</div>';
+        list.innerHTML = '<div style="padding:10px;">Please sign in to view history.</div>';
         return;
     }
-
-    db.collection('users').doc(currentUser.uid).collection('snapshots')
-      .orderBy('savedAt', 'desc')
-      .limit(15)
-      .get()
-      .then(snapshot => {
-          const list = document.getElementById('history-list');
-          if (snapshot.empty) {
-              list.innerHTML = '<div style="padding:10px; color:var(--color-text-muted);">No history snapshots found.</div>';
-              return;
-          }
-
-          let html = '';
-          snapshot.forEach(doc => {
-              const data = doc.data();
-              const dateStr = data.savedAt ? data.savedAt.toDate().toLocaleString() : 'Unknown Date';
-              const reason = data.reason || 'auto_backup';
-              html += `<div class="review-list-item" style="display:flex; justify-content:space-between; align-items:center;">
-                  <div>
-                    <strong>${dateStr}</strong>
-                    <div style="font-size: 11px; color: var(--color-text-faint);">${reason}</div>
-                  </div>
-                  <button class="btn-add" onclick="restoreSnapshot('${doc.id}')">Restore</button>
-              </div>`;
-          });
-          list.innerHTML = html;
-      }).catch(e => {
-          console.error(e);
-          document.getElementById('history-list').innerHTML = '<div style="padding:10px; color:var(--color-high);">Error loading history.</div>';
-      });
+    const items = Array.isArray(versionHistoryCache) ? versionHistoryCache : [];
+    if (!items.length) {
+        list.innerHTML = '<div style="padding:10px; color:var(--color-text-muted);">No history snapshots found.</div>';
+        return;
+    }
+    let html = '';
+    items.forEach((item, index) => {
+        const dateStr = item.savedAtIso ? new Date(item.savedAtIso).toLocaleString() : 'Unknown Date';
+        const reason = item.reason || 'auto_backup';
+        html += `<div class="review-list-item" style="display:flex; justify-content:space-between; align-items:center;">
+            <div>
+              <strong>${dateStr}</strong>
+              <div style="font-size: 11px; color: var(--color-text-faint);">${reason}</div>
+            </div>
+            <button class="btn-add" onclick="restoreSnapshot(${index})">Restore</button>
+        </div>`;
+    });
+    list.innerHTML = html;
 }
 
-function restoreSnapshot(docId) {
+function restoreSnapshot(index) {
     if(!confirm("Are you sure you want to restore this version?\nYour current tasks will be overwritten.")) return;
-
-    db.collection('users').doc(currentUser.uid).collection('snapshots').doc(docId).get().then(doc => {
-        if (doc.exists) {
-            const data = doc.data();
-            let restoredState = data.state;
-            if (typeof migrateStateSchema === 'function') restoredState = migrateStateSchema(restoredState);
-            state = restoredState;
-            updateAll();
-            closeModal('history-modal');
-            showToast('History restored successfully!');
-        }
-    }).catch(e => {
-        console.error(e);
-        showToast('Error restoring history.');
-    });
+    const item = (Array.isArray(versionHistoryCache) ? versionHistoryCache[index] : null);
+    if (!item || !item.state) return showToast('Selected history version is unavailable.');
+    let restoredState = JSON.parse(JSON.stringify(item.state));
+    if (typeof migrateStateSchema === 'function') restoredState = migrateStateSchema(restoredState);
+    state = restoredState;
+    updateAll();
+    closeModal('history-modal');
+    showToast('History restored successfully!');
 }
 
 function generateReadableText() {
     let text = "GTD Planner - Active Tasks\n\n";
     state.categories.forEach(cat => {
         if(cat.id === 'projects') return;
-        const activeTasks = cat.tasks.filter(t => !t.done);
+        const activeTasks = sortTasksForDisplay(cat.tasks.filter(t => !t.done), cat.id);
         if(activeTasks.length > 0) {
             text += `=== ${cat.name.toUpperCase()} ===\n`;
             activeTasks.forEach(t => {
                 let prio = t.priority ? `[${t.priority.toUpperCase()}] ` : '';
+                let due = t.dueDate ? ` (Due: ${t.dueDate})` : '';
                 let projStr = '';
                 if (t.projectId) {
                     const pCat = state.categories.find(c => c.id === 'projects');
@@ -1990,7 +2008,7 @@ function generateReadableText() {
                         if (p) projStr = ` (Project: ${p.title})`;
                     }
                 }
-                text += `- ${prio}${t.title}${projStr}\n`;
+                text += `- ${prio}${t.title}${due}${projStr}\n`;
             });
             text += `\n`;
         }
