@@ -10,7 +10,7 @@
 
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>GTD Planner - Pro Edition</title>
+<title>GTD Pro Planner (v70)</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300..700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
@@ -214,77 +214,79 @@ input,textarea,select{font:inherit;color:inherit}
     .hover-bg:hover { background: var(--color-surface-offset); border-color: var(--color-primary) !important; }
 
 
-/* --- MOBILE RESPONSIVENESS --- */
+
+
+
+/* --- RESPONSIVE & MOBILE LAYOUT (v69) --- */
+.app { transition: grid-template-columns 0.25s ease; }
+.app.sidebar-collapsed { grid-template-columns: 60px 1fr !important; }
+
+/* Desktop Collapse Rules */
+.app.sidebar-collapsed .sidebar { overflow: hidden; padding: var(--space-6) 12px; }
+.app.sidebar-collapsed .sidebar .nav-label,
+.app.sidebar-collapsed .sidebar .nav-group-title,
+.app.sidebar-collapsed .logo-text { display: none !important; }
+.app.sidebar-collapsed .nav-item { justify-content: center; padding: 10px 0; }
+.app.sidebar-collapsed .nav-item i { margin: 0; }
+
+#mobile-overlay {
+  display: none; position: fixed; inset: 0;
+  background: rgba(0,0,0,.45); z-index: 1999;
+}
+#mobile-overlay.active { display: block; }
+
+.menu-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  background: transparent; border: none; color: var(--color-text);
+  cursor: pointer; padding: 6px; border-radius: var(--radius-sm);
+}
+.menu-btn:hover { background: var(--color-surface-offset); }
+
 @media (max-width: 768px) {
-  .app-container { flex-direction: column; }
+  .app { display: flex !important; flex-direction: column; height: 100dvh; }
+  .topbar { padding: 8px 12px; gap: 8px; flex-wrap: wrap; height: auto; }
+  .topbar-right { width: 100%; overflow-x: auto; gap: 6px; padding-bottom: 4px; justify-content: flex-start; -webkit-overflow-scrolling: touch; }
+  .topbar-right .btn-home { font-size: 11px; padding: 4px 8px; white-space: nowrap; flex-shrink: 0; }
+  .topbar-right .view-toggle { flex-shrink: 0; }
 
-  /* Sidebar becomes a scrollable horizontal top bar */
-  .sidebar { 
-    width: 100%; 
-    height: auto; 
-    flex-direction: row; 
-    overflow-x: auto; 
-    padding: var(--space-2); 
-    border-right: none; 
-    border-bottom: 1px solid var(--color-divider);
-    flex-shrink: 0;
-    -webkit-overflow-scrolling: touch;
+  .sidebar {
+    position: fixed; top: 0; left: 0; bottom: 0;
+    width: min(82vw, 290px); transform: translateX(-100%);
+    z-index: 2000; box-shadow: 4px 0 18px rgba(0,0,0,.35);
+    transition: transform 0.3s ease; padding-top: var(--space-4);
   }
+  .app.sidebar-open .sidebar { transform: translateX(0); }
 
-  .sidebar-header { display: none; } /* Hide logo to save space */
-  .nav-group { 
-    display: flex; 
-    flex-direction: row; 
-    gap: var(--space-1); 
-    margin: 0; 
-    align-items: center;
-  }
-  .nav-group-title { display: none; }
-  .nav-item { 
-    padding: var(--space-2) var(--space-3); 
-    border-radius: var(--radius-full); 
-    white-space: nowrap;
-    background: var(--color-surface-offset);
-  }
-  .nav-item.active {
-    background: var(--color-primary-highlight);
-  }
-
-  /* Header */
-  .header { padding: var(--space-3); flex-direction: column; gap: var(--space-3); align-items: flex-start; height: auto; }
-  .header-actions { width: 100%; justify-content: space-between; }
-
-  /* Main Content */
-  .main-content { padding: 0; }
-  .content-header { padding: var(--space-4); flex-direction: column; gap: var(--space-3); align-items: flex-start; }
+  .main-content { flex: 1; min-width: 0; overflow-y: auto; padding: 0; }
+  .content-header { padding: var(--space-3) var(--space-3) 0 var(--space-3); flex-direction: column; align-items: flex-start; gap: var(--space-2); }
   .view-controls { width: 100%; justify-content: space-between; }
-  .view-controls button { flex: 1; }
+  .view-controls button { flex: 1; padding: 6px 0; font-size: 12px; }
 
-  /* Tasks List */
-  .list-view-content { padding: var(--space-4); }
-  .task-card { padding: var(--space-3); }
-  .task-meta { flex-wrap: wrap; }
+  .list-view-content { padding: 10px; }
 
-  /* Dashboard */
-  .dashboard-grid { grid-template-columns: 1fr 1fr; }
+  /* Compact Mobile Task Cards */
+  .task-card {
+    display: grid; grid-template-columns: 24px 1fr auto; gap: 8px;
+    padding: 10px !important; align-items: start; margin-bottom: 8px;
+  }
+  .task-content { min-width: 0; }
+  .task-title { font-size: 14px !important; line-height: 1.35; white-space: normal; word-break: break-word; margin-bottom: 4px; }
+  .task-meta { display: flex; flex-wrap: wrap; gap: 4px; }
+  .task-actions { opacity: 1 !important; align-self: start; display: flex; gap: 4px; flex-direction: column; }
+  .task-actions button { padding: 4px; }
 
-  /* Flow View */
-  #view-flow { flex-direction: column !important; padding: var(--space-3) !important; gap: var(--space-2) !important; }
-  #flow-side-panel { width: 100% !important; height: 50% !important; border-left: none; }
-
-  /* Priority Matrix */
+  /* Flow & Priority Adapts */
+  #view-flow { flex-direction: column !important; padding: 0 !important; }
+  #flow-side-panel { width: 100% !important; height: 50% !important; border-left: none; border-top: 1px solid var(--color-border); }
   .priority-layout { flex-direction: column; }
-  .priority-sidebar { width: 100%; height: 250px; border-right: none; border-bottom: 1px solid var(--color-border); }
+  .priority-sidebar { width: 100%; height: auto; min-height: 150px; border-right: none; border-bottom: 1px solid var(--color-border); }
   .eisenhower-grid { grid-template-columns: 1fr; gap: var(--space-3); }
 
-  /* Modals */
   .modal { width: 95% !important; padding: var(--space-4); margin: auto; }
-  #clarify-modal .modal { max-height: 90vh; }
-
-  /* Quick Hide on Mobile */
   .hide-on-mobile { display: none !important; }
 }
-/* --- END MOBILE RESPONSIVENESS --- */
+/* --- END RESPONSIVE LAYOUT --- */
+
 
 </style>
 
@@ -305,46 +307,50 @@ input,textarea,select{font:inherit;color:inherit}
     <div id="firebaseui-auth-container"></div>
 </div>
 
+  <div id="mobile-overlay" onclick="toggleSidebar()"></div>
   <div class="app">
     <!-- Topbar -->
     <div class="topbar">
-      <div class="topbar-left">
+      <div class="topbar-left" style="display:flex; align-items:center; gap:8px;">
+        <button class="menu-btn" onclick="toggleSidebar()" title="Toggle Menu">
+          <i data-lucide="menu" style="width:24px;height:24px;"></i>
+        </button>
         <div class="logo">
-          <i data-lucide="check-square"></i> GTD Master Planner
+          <i data-lucide="check-square"></i> <span class="logo-text">GTD Master Planner</span>
         </div>
       </div>
       <div class="topbar-right">
 
 <button class="btn-home" id="btn-logout" style="background: var(--color-surface-offset); color: var(--color-text-muted); display: none;">
-    <i data-lucide="log-out"></i> Logout
-</button>
+    <i data-lucide="log-out"></i> <span class="nav-label">Logout
+</span></button>
 
         <button class="btn-home" onclick="resetAll()">
-          <i data-lucide="home"></i> Home View
-        </button>
+          <i data-lucide="home"></i> <span class="nav-label">Home View
+        </span></button>
         <button class="btn-home" onclick="openHistoryModal()" title="View and restore past versions">
-          <i data-lucide="history"></i> History
-        </button>
+          <i data-lucide="history"></i> <span class="nav-label">History
+        </span></button>
         <button class="btn-home" onclick="openShareModal()" title="Export view to PDF, Email, or Text">
-          <i data-lucide="share"></i> Share
-        </button>
+          <i data-lucide="share"></i> <span class="nav-label">Share
+        </span></button>
         <button class="btn-home" onclick="exportBackup()" title="Export all tasks as a JSON backup file">
-          <i data-lucide="download"></i> Export
-        </button>
+          <i data-lucide="download"></i> <span class="nav-label">Export
+        </span></button>
         <button class="btn-home" onclick="document.getElementById('import-file-input').click()" title="Restore tasks from a JSON backup file">
-          <i data-lucide="upload"></i> Import
-        </button>
+          <i data-lucide="upload"></i> <span class="nav-label">Import
+        </span></button>
         <input type="file" id="import-file-input" accept=".json" style="display:none" onchange="importBackup(event)">
         <div class="view-toggle">
           <button class="view-btn active" id="btn-list" ondblclick="startClarifyWizard(d.data.catId || d.data.id || currentProjId || 'projects', '${task.id}')" onclick="switchView('list')">
-            <i data-lucide="list"></i> List View
-          </button>
+            <i data-lucide="list"></i> <span class="nav-label">List View
+          </span></button>
           <button class="view-btn" id="btn-flow" onclick="switchView('flow')">
-            <i data-lucide="aperture"></i> Flow View
-          </button>
+            <i data-lucide="aperture"></i> <span class="nav-label">Flow View
+          </span></button>
           <button class="view-btn" id="btn-priority" onclick="switchView('priority')">
-            <i data-lucide="grid-2x2"></i> Priority Matrix
-          </button>
+            <i data-lucide="grid-2x2"></i> <span class="nav-label">Priority Matrix
+          </span></button>
         </div>
       </div>
     </div>
@@ -378,13 +384,13 @@ input,textarea,select{font:inherit;color:inherit}
                 ondragover="event.preventDefault(); this.style.background='var(--color-surface-dynamic)';"
                 ondragleave="this.style.background='';"
                 ondrop="handleTrashDrop(event); this.style.background='';">
-          <i data-lucide="trash-2"></i> Trash
-        </button>
+          <i data-lucide="trash-2"></i> <span class="nav-label">Trash
+        </span></button>
       </div>
 
       <button class="btn-review" onclick="startWeeklyReview()">
-        <i data-lucide="refresh-cw"></i> Weekly Review
-      </button>
+        <i data-lucide="refresh-cw"></i> <span class="nav-label">Weekly Review
+      </span></button>
     </div>
 
     <!-- Main -->
@@ -567,9 +573,10 @@ input,textarea,select{font:inherit;color:inherit}
     <div class="modal" style="width: 400px;">
       <h3><i data-lucide="share"></i> Share / Export View</h3>
       <div class="review-text">
-        Export your active tasks into a clean, readable format.
+        Export or share your active tasks instantly.
       </div>
       <div style="display: flex; flex-direction: column; gap: var(--space-3); margin-top: var(--space-4);">
+        <button class="btn-secondary" style="justify-content: center; padding: 12px; display: flex; align-items: center; gap: 8px; background: var(--color-primary); color: white; border: none;" onclick="nativeShare()"><i data-lucide="share-2" style="width:16px;height:16px;"></i> Share to App (WhatsApp, Messenger, etc.)</button>
         <button class="btn-secondary" style="justify-content: center; padding: 12px; display: flex; align-items: center; gap: 8px;" onclick="printToPDF()"><i data-lucide="printer" style="width:16px;height:16px;"></i> Print / Save as PDF</button>
         <button class="btn-secondary" style="justify-content: center; padding: 12px; display: flex; align-items: center; gap: 8px;" onclick="sendViaEmail()"><i data-lucide="mail" style="width:16px;height:16px;"></i> Send via Email</button>
         <button class="btn-secondary" style="justify-content: center; padding: 12px; display: flex; align-items: center; gap: 8px;" onclick="copyAsText()"><i data-lucide="clipboard" style="width:16px;height:16px;"></i> Copy as Text</button>
@@ -659,8 +666,8 @@ input,textarea,select{font:inherit;color:inherit}
         </div>
 
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); margin-top: var(--space-3);">
-          <button class="btn-secondary" style="justify-content: center;" onclick="processClarify('someday')"><i data-lucide="coffee"></i> Someday</button>
-          <button class="btn-secondary" style="justify-content: center; color: var(--color-high);" onclick="processClarify('trash')"><i data-lucide="trash-2"></i> Trash</button>
+          <button class="btn-secondary" style="justify-content: center;" onclick="processClarify('someday')"><i data-lucide="coffee"></i> <span class="nav-label">Someday</span></button>
+          <button class="btn-secondary" style="justify-content: center; color: var(--color-high);" onclick="processClarify('trash')"><i data-lucide="trash-2"></i> <span class="nav-label">Trash</span></button>
         </div>
 
       </div>
@@ -1100,7 +1107,7 @@ input,textarea,select{font:inherit;color:inherit}
 
     function renderSidebar() {
       const target = document.getElementById('sidebar-nav-container');
-      let html = `<button class="nav-item ${state.activeNav === 'all' ? 'active' : ''}" onclick="setNavFilter('all')"><i data-lucide="layers"></i> All Tasks</button>`;
+      let html = `<button class="nav-item ${state.activeNav === 'all' ? 'active' : ''}" onclick="setNavFilter('all')"><i data-lucide="layers"></i> <span class="nav-label">All Tasks</span></button>`;
       state.categories.forEach(cat => {
         const count = cat.tasks.filter(t => !t.done).length;
         html += `<button class="nav-item ${state.activeNav === cat.id ? 'active' : ''}" onclick="setNavFilter('${cat.id}')">
@@ -1162,8 +1169,13 @@ input,textarea,select{font:inherit;color:inherit}
 
     function getDueRank(task) {
       if (!task || !task.dueDate) return Number.MAX_SAFE_INTEGER;
-      const t = new Date(task.dueDate + 'T23:59:59').getTime();
-      return Number.isFinite(t) ? t : Number.MAX_SAFE_INTEGER;
+      // Handle potential cross-browser timezone bugs by creating a clean local date
+      const parts = task.dueDate.split('-');
+      if (parts.length === 3) {
+          const d = new Date(parts[0], parts[1] - 1, parts[2], 23, 59, 59);
+          return d.getTime();
+      }
+      return Number.MAX_SAFE_INTEGER;
     }
 
     function sortTasksForDisplay(tasks, catId, sourceType = 'active') {
@@ -1252,7 +1264,7 @@ input,textarea,select{font:inherit;color:inherit}
                 <i data-lucide="edit-2" style="width:16px;height:16px;"></i>
               </button>
             </h2>
-            <button class="btn-add" onclick="openModal('next-actions', '${currentProjId}')"><i data-lucide="plus"></i> Add Action</button>
+            <button class="btn-add" onclick="openModal('next-actions', '${currentProjId}')"><i data-lucide="plus"></i> <span class="nav-label">Add Action</span></button>
           </div>`;
           state.categories.forEach(cat => {
               if (cat.id === 'projects') return;
@@ -1274,7 +1286,7 @@ input,textarea,select{font:inherit;color:inherit}
       else if (isTrashView) {
           html += `<div class="section-header">
             <h2 class="section-title" style="color:var(--color-high)"><i data-lucide="trash-2"></i> Trash Bin</h2>
-            ${state.trash.length > 0 ? `<button class="btn-secondary" onclick="state.trash=[]; updateAll();"><i data-lucide="alert-triangle"></i> Empty Trash</button>` : ''}
+            ${state.trash.length > 0 ? `<button class="btn-secondary" onclick="state.trash=[]; updateAll();"><i data-lucide="alert-triangle"></i> <span class="nav-label">Empty Trash</span></button>` : ''}
           </div>`;
           catsToRender.push({ id: 'trash', name: 'Deleted Items', tasks: state.trash, color: 'var(--color-high)' });
       }
@@ -1841,7 +1853,7 @@ input,textarea,select{font:inherit;color:inherit}
                           <i data-lucide="inbox" style="width: 14px; height: 14px;"></i> Process Inbox
                       </div>
                       <div style="color: var(--color-text-muted); font-size: 12px; margin-bottom: 12px;">Process thoughts one-by-one into actionable GTD outcomes.</div>
-                      <button class="btn-primary" style="width: 100%; justify-content: center;" onclick="startClarifyWizard()"><i data-lucide="wand-2"></i> Launch Clarify Wizard</button>
+                      <button class="btn-primary" style="width: 100%; justify-content: center;" onclick="startClarifyWizard()"><i data-lucide="wand-2"></i> <span class="nav-label">Launch Clarify Wizard</span></button>
                   </div>`;
               }
               // STUCK PROJECT BANNER
@@ -2295,6 +2307,31 @@ function openHistoryModal() {
     if(typeof lucide !== 'undefined') lucide.createIcons();
 }
 
+
+async function nativeShare() {
+    const text = generateReadableText();
+
+    if (navigator.share) {
+        try {
+            await navigator.share({
+                title: 'My GTD Tasks',
+                text: text
+            });
+            showToast("Shared successfully!");
+        } catch (err) {
+            console.error('Share failed:', err);
+            // Some browsers throw AbortError if user cancels, which is fine
+        }
+    } else {
+        // Fallback for desktop browsers without Web Share API
+        const encodedText = encodeURIComponent(text);
+        const whatsappUrl = `https://wa.me/?text=${encodedText}`;
+        window.open(whatsappUrl, '_blank');
+        showToast("Opened WhatsApp Web fallback");
+    }
+    closeModal('share-modal');
+}
+
 function openShareModal() {
     document.getElementById('share-modal').classList.add('active');
     if(typeof lucide !== 'undefined') lucide.createIcons();
@@ -2390,7 +2427,7 @@ function generatePrintHTML() {
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="GTD Planner">
 
-        <title>GTD Planner Print View</title>
+        <title>GTD Pro Planner (v70)</title>
         <style>
             body { font-family: 'Inter', sans-serif; padding: 40px; max-width: 800px; margin: 0 auto; color: #333; line-height: 1.5; }
             @media print { body { padding: 0; } }
@@ -2398,77 +2435,79 @@ function generatePrintHTML() {
     .hover-bg:hover { background: var(--color-surface-offset); border-color: var(--color-primary) !important; }
 
 
-/* --- MOBILE RESPONSIVENESS --- */
+
+
+
+/* --- RESPONSIVE & MOBILE LAYOUT (v69) --- */
+.app { transition: grid-template-columns 0.25s ease; }
+.app.sidebar-collapsed { grid-template-columns: 60px 1fr !important; }
+
+/* Desktop Collapse Rules */
+.app.sidebar-collapsed .sidebar { overflow: hidden; padding: var(--space-6) 12px; }
+.app.sidebar-collapsed .sidebar .nav-label,
+.app.sidebar-collapsed .sidebar .nav-group-title,
+.app.sidebar-collapsed .logo-text { display: none !important; }
+.app.sidebar-collapsed .nav-item { justify-content: center; padding: 10px 0; }
+.app.sidebar-collapsed .nav-item i { margin: 0; }
+
+#mobile-overlay {
+  display: none; position: fixed; inset: 0;
+  background: rgba(0,0,0,.45); z-index: 1999;
+}
+#mobile-overlay.active { display: block; }
+
+.menu-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  background: transparent; border: none; color: var(--color-text);
+  cursor: pointer; padding: 6px; border-radius: var(--radius-sm);
+}
+.menu-btn:hover { background: var(--color-surface-offset); }
+
 @media (max-width: 768px) {
-  .app-container { flex-direction: column; }
+  .app { display: flex !important; flex-direction: column; height: 100dvh; }
+  .topbar { padding: 8px 12px; gap: 8px; flex-wrap: wrap; height: auto; }
+  .topbar-right { width: 100%; overflow-x: auto; gap: 6px; padding-bottom: 4px; justify-content: flex-start; -webkit-overflow-scrolling: touch; }
+  .topbar-right .btn-home { font-size: 11px; padding: 4px 8px; white-space: nowrap; flex-shrink: 0; }
+  .topbar-right .view-toggle { flex-shrink: 0; }
 
-  /* Sidebar becomes a scrollable horizontal top bar */
-  .sidebar { 
-    width: 100%; 
-    height: auto; 
-    flex-direction: row; 
-    overflow-x: auto; 
-    padding: var(--space-2); 
-    border-right: none; 
-    border-bottom: 1px solid var(--color-divider);
-    flex-shrink: 0;
-    -webkit-overflow-scrolling: touch;
+  .sidebar {
+    position: fixed; top: 0; left: 0; bottom: 0;
+    width: min(82vw, 290px); transform: translateX(-100%);
+    z-index: 2000; box-shadow: 4px 0 18px rgba(0,0,0,.35);
+    transition: transform 0.3s ease; padding-top: var(--space-4);
   }
+  .app.sidebar-open .sidebar { transform: translateX(0); }
 
-  .sidebar-header { display: none; } /* Hide logo to save space */
-  .nav-group { 
-    display: flex; 
-    flex-direction: row; 
-    gap: var(--space-1); 
-    margin: 0; 
-    align-items: center;
-  }
-  .nav-group-title { display: none; }
-  .nav-item { 
-    padding: var(--space-2) var(--space-3); 
-    border-radius: var(--radius-full); 
-    white-space: nowrap;
-    background: var(--color-surface-offset);
-  }
-  .nav-item.active {
-    background: var(--color-primary-highlight);
-  }
-
-  /* Header */
-  .header { padding: var(--space-3); flex-direction: column; gap: var(--space-3); align-items: flex-start; height: auto; }
-  .header-actions { width: 100%; justify-content: space-between; }
-
-  /* Main Content */
-  .main-content { padding: 0; }
-  .content-header { padding: var(--space-4); flex-direction: column; gap: var(--space-3); align-items: flex-start; }
+  .main-content { flex: 1; min-width: 0; overflow-y: auto; padding: 0; }
+  .content-header { padding: var(--space-3) var(--space-3) 0 var(--space-3); flex-direction: column; align-items: flex-start; gap: var(--space-2); }
   .view-controls { width: 100%; justify-content: space-between; }
-  .view-controls button { flex: 1; }
+  .view-controls button { flex: 1; padding: 6px 0; font-size: 12px; }
 
-  /* Tasks List */
-  .list-view-content { padding: var(--space-4); }
-  .task-card { padding: var(--space-3); }
-  .task-meta { flex-wrap: wrap; }
+  .list-view-content { padding: 10px; }
 
-  /* Dashboard */
-  .dashboard-grid { grid-template-columns: 1fr 1fr; }
+  /* Compact Mobile Task Cards */
+  .task-card {
+    display: grid; grid-template-columns: 24px 1fr auto; gap: 8px;
+    padding: 10px !important; align-items: start; margin-bottom: 8px;
+  }
+  .task-content { min-width: 0; }
+  .task-title { font-size: 14px !important; line-height: 1.35; white-space: normal; word-break: break-word; margin-bottom: 4px; }
+  .task-meta { display: flex; flex-wrap: wrap; gap: 4px; }
+  .task-actions { opacity: 1 !important; align-self: start; display: flex; gap: 4px; flex-direction: column; }
+  .task-actions button { padding: 4px; }
 
-  /* Flow View */
-  #view-flow { flex-direction: column !important; padding: var(--space-3) !important; gap: var(--space-2) !important; }
-  #flow-side-panel { width: 100% !important; height: 50% !important; border-left: none; }
-
-  /* Priority Matrix */
+  /* Flow & Priority Adapts */
+  #view-flow { flex-direction: column !important; padding: 0 !important; }
+  #flow-side-panel { width: 100% !important; height: 50% !important; border-left: none; border-top: 1px solid var(--color-border); }
   .priority-layout { flex-direction: column; }
-  .priority-sidebar { width: 100%; height: 250px; border-right: none; border-bottom: 1px solid var(--color-border); }
+  .priority-sidebar { width: 100%; height: auto; min-height: 150px; border-right: none; border-bottom: 1px solid var(--color-border); }
   .eisenhower-grid { grid-template-columns: 1fr; gap: var(--space-3); }
 
-  /* Modals */
   .modal { width: 95% !important; padding: var(--space-4); margin: auto; }
-  #clarify-modal .modal { max-height: 90vh; }
-
-  /* Quick Hide on Mobile */
   .hide-on-mobile { display: none !important; }
 }
-/* --- END MOBILE RESPONSIVENESS --- */
+/* --- END RESPONSIVE LAYOUT --- */
+
 
 </style>
     </head>
