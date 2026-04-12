@@ -349,7 +349,8 @@ input,textarea,select{font:inherit;color:inherit}
           <aside class="priority-sidebar">
             <div class="priority-sidebar-header">
               <h3 style="margin:0;display:flex;align-items:center;gap:8px;"><i data-lucide="list-todo"></i> Task Pool</h3>
-              <div class="priority-sub" style="margin-top:4px;">Drag unassigned tasks into the matrix</div>
+                            <div class="priority-sub" style="margin-top:4px;">Drag unassigned tasks into the matrix</div>
+              <button class="btn-secondary" style="width:100%; justify-content:center; margin-top:12px; font-size:11px;" onclick="autoPrioritizePool()"><i data-lucide="sparkles" style="width:12px;height:12px;"></i> Auto-Prioritize based on GTD</button>
             </div>
             <div id="priority-task-pool" class="priority-task-pool" ondragover="allowPriorityDrop(event)" ondrop="handlePriorityDrop(event, '')"></div>
           </aside>
@@ -362,13 +363,13 @@ input,textarea,select{font:inherit;color:inherit}
 
             <div class="eisenhower-grid">
               <div class="quadrant q1" ondragover="allowPriorityDrop(event)" ondrop="handlePriorityDrop(event, 'q1')">
-                <div class="quadrant-title" style="color:var(--color-high);">Q1: Urgent Red (Do First)</div>
+                <div class="quadrant-title" style="color:var(--color-high);">Q1: Manage (Do First)</div>
                 <div class="quadrant-sub">Urgent + Important</div>
                 <div id="quadrant-q1" class="quadrant-body"></div>
               </div>
 
               <div class="quadrant q2" ondragover="allowPriorityDrop(event)" ondrop="handlePriorityDrop(event, 'q2')">
-                <div class="quadrant-title" style="color:#eab308;">Q2: Yellow (Schedule)</div>
+                <div class="quadrant-title" style="color:#eab308;">Q2: Focus (Schedule)</div>
                 <div class="quadrant-sub">Not Urgent + Important</div>
                 <div id="quadrant-q2" class="quadrant-body"></div>
               </div>
@@ -413,10 +414,10 @@ input,textarea,select{font:inherit;color:inherit}
           <label>Priority</label>
           <select id="task-priority-input">
             <option value="" selected>-- Select Priority (Optional) --</option>
-            <option value="q1">Q1: Urgent Red (Do First)</option>
-            <option value="q2">Q2: Yellow (Schedule)</option>
-            <option value="q3">Q3: Green (Delegate)</option>
-            <option value="q4">Q4: Grey (Eliminate)</option>
+            <option value="q1">Q1: Manage (Urgent & Important)</option>
+            <option value="q2">Q2: Focus (Important, Not Urgent)</option>
+            <option value="q3">Q3: Delegate (Urgent, Not Important)</option>
+            <option value="q4">Q4: Avoid (Neither)</option>
           </select>
         </div>
       </div>
@@ -1950,6 +1951,45 @@ function renderPriorityView() {
 
   if (typeof lucide !== 'undefined') lucide.createIcons();
 }
+
+function autoPrioritizePool() {
+    let changed = false;
+    const tasks = state.categories
+        .filter(c => c.id !== 'projects')
+        .flatMap(cat => cat.tasks)
+        .filter(t => !t.done && (!t.priority || t.priority === ''));
+
+    tasks.forEach(task => {
+        changed = true;
+        // Priority Logic based on GTD attributes:
+        const hasDate = !!task.dueDate;
+        const time = task.time ? parseInt(task.time) : null;
+
+        const catNode = state.categories.find(c => c.tasks.includes(task));
+        const catId = catNode ? catNode.id : '';
+
+        // 1. If it has a date and takes less than 15 mins -> Q1 (Do First, it's urgent and fast)
+        if (hasDate && time && time <= 15) task.priority = 'q1';
+        // 2. If it has a date but takes a long time -> Q2 (Needs focus/scheduling)
+        else if (hasDate) task.priority = 'q2';
+        // 3. If it's in "Waiting For" -> Q3 (Delegated)
+        else if (catId === 'waiting') task.priority = 'q3';
+        // 4. If it takes a long time but has no date -> Q2 (Needs scheduling)
+        else if (time && time > 30) task.priority = 'q2';
+        // 5. If it's in "Someday/Maybe" -> Q4 (Eliminate/Avoid for now)
+        else if (catId === 'someday') task.priority = 'q4';
+        // 6. Otherwise default Q2
+        else task.priority = 'q2';
+    });
+
+    if (changed) {
+        showToast("Remaining tasks auto-prioritized!");
+        updateAll();
+    } else {
+        showToast("No unassigned tasks found.");
+    }
+}
+
 // --- END PRIORITY VIEW HELPERS ---
 
 function switchView(viewName, fromFlowClick = false) {
