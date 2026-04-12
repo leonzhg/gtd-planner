@@ -2571,22 +2571,52 @@ function switchView(viewName, fromFlowClick = false) {
       if(viewName === 'calendar') renderCalendar();
     }
 
-    function updateAll() { 
-    updateStats(); 
-    renderSidebar(); 
-    renderList(); 
-    initFlowView(); 
-    if (document.getElementById('view-priority') && document.getElementById('view-priority').classList.contains('active')) {
-        renderPriorityView();
+    function updateAll(options = {}) {
+  updateStats();
+  renderSidebar();
+  renderList();
+
+  if (document.getElementById('view-flow')?.classList.contains('active')) {
+    initFlowView();
+  }
+
+  if (document.getElementById('view-priority')?.classList.contains('active')) {
+    renderPriorityView();
+  }
+
+  if (document.getElementById('view-calendar')?.classList.contains('active') && typeof renderCalendar === 'function') {
+    renderCalendar();
+  }
+
+  if (options.skipSave) return;
+
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    if (typeof saveUserData === 'function') {
+      saveUserData();
     }
-    if (document.getElementById('view-calendar') && document.getElementById('view-calendar').classList.contains('active')) {
-        if (typeof renderCalendar === 'function') renderCalendar();
-    }
-    if (typeof saveUserData === 'function' && typeof currentUser !== 'undefined' && currentUser) {
-        saveUserData();
-    }
+  }, 150);
 }
-    updateAll();
+
+document.addEventListener('DOMContentLoaded', () => {
+  loadLocalBackup();
+  updateAll({ skipSave: true });
+});
+
+window.addEventListener('beforeunload', () => {
+  try {
+    localStorage.setItem(LOCAL_STATE_KEY, JSON.stringify({
+      state: state,
+      versionHistory: Array.isArray(versionHistoryCache) ? versionHistoryCache : [],
+      savedAt: Date.now()
+    }));
+  } catch (error) {
+    console.error('beforeunload local save failed:', error);
+  }
+});
+
+    // Run initial update silently
+    updateAll({ skipSave: true });
     window.addEventListener('resize', () => { if(document.getElementById('view-flow').classList.contains('active')) initFlowView(); });
   </script>
 
@@ -2695,7 +2725,7 @@ function loadUserData(uid) {
                 cloudState = migrateStateSchema(cloudState);
             }
             state = cloudState;
-            if(typeof updateAll === 'function') updateAll();
+            if(typeof updateAll === 'function') updateAll({ skipSave: false });
         } else {
             console.log("New user, creating cloud save...");
             versionHistoryCache = [];
@@ -2707,16 +2737,53 @@ function loadUserData(uid) {
 }
 
 // Save tasks to Cloud Database
+const LOCAL_STATE_KEY = 'gtd-planner-v73-state';
+let saveTimer = null;
+
 function saveUserData() {
-    if (currentUser && typeof state !== 'undefined') {
-        db.collection('users').doc(currentUser.uid).set({
-            state: state,
-            versionHistory: Array.isArray(versionHistoryCache) ? versionHistoryCache : [],
-            lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
-        }, { merge: true }).catch((error) => {
-            console.error("Error saving user data:", error);
-        });
+  try {
+    localStorage.setItem(LOCAL_STATE_KEY, JSON.stringify({
+      state: state,
+      versionHistory: Array.isArray(versionHistoryCache) ? versionHistoryCache : [],
+      savedAt: Date.now()
+    }));
+  } catch (error) {
+    console.error('Local save failed:', error);
+  }
+
+  if (typeof currentUser === 'undefined' || !currentUser || typeof db === 'undefined' || !db) {
+    return Promise.resolve(false);
+  }
+
+  return db.collection('users').doc(currentUser.uid).set({
+    state: state,
+    versionHistory: Array.isArray(versionHistoryCache) ? versionHistoryCache : [],
+    lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
+  }, { merge: true }).then(() => {
+    return true;
+  }).catch((error) => {
+    console.error('Cloud save failed:', error);
+    return false;
+  });
+}
+
+function loadLocalBackup() {
+  try {
+    const raw = localStorage.getItem(LOCAL_STATE_KEY);
+    if (!raw) return false;
+
+    const parsed = JSON.parse(raw);
+    if (!parsed || !parsed.state) return false;
+
+    state = migrateStateSchema(parsed.state);
+    if (Array.isArray(parsed.versionHistory)) {
+      versionHistoryCache = parsed.versionHistory;
     }
+    return true;
+  } catch (error) {
+    console.error('Local load failed:', error);
+    return false;
+  }
 }
 
 // Intercept the original updateAll function so it saves to the cloud every time you modify a task
