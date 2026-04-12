@@ -337,7 +337,7 @@ input,textarea,select{font:inherit;color:inherit}
         <div id="flow-side-panel" style="display: none; width: 340px; flex-direction: column; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: var(--space-4); overflow-y: auto; height: 100%; box-shadow: var(--shadow-sm);">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--space-4); border-bottom: 1px solid var(--color-divider); padding-bottom: var(--space-2);">
             <div id="flow-panel-title" style="font-size: var(--text-base); font-weight: 600; color: var(--color-primary); display: flex; align-items: center; gap: 8px; margin:0; flex:1; overflow:hidden;"></div>
-            <button class="action-btn" onclick="if(window.zoomToNode && window.flowRoot) window.zoomToNode(window.flowRoot)" title="Close Panel"><i data-lucide="x" style="width: 16px; height: 16px;"></i></button>
+            <button class="action-btn" onclick="if(window.zoomToNode) window.zoomToNode(null)" title="Close Panel"><i data-lucide="x" style="width: 16px; height: 16px;"></i></button>
           </div>
           <div id="flow-panel-list" style="display: flex; flex-direction: column; gap: 8px; flex: 1;"></div>
         </div>
@@ -1023,7 +1023,7 @@ input,textarea,select{font:inherit;color:inherit}
       state.categories.forEach(cat => {
         const count = cat.tasks.filter(t => !t.done).length;
         html += `<button class="nav-item ${state.activeNav === cat.id ? 'active' : ''}" onclick="setNavFilter('${cat.id}')">
-            <div class="dot" style="background:${categoryColors[cat.id]}"></div>${cat.name}<div class="nav-count">${count}</div></button>`;
+            <div class="dot" style="background:${categoryColors[cat.id] || 'var(--color-primary)'}"></div>${cat.name}<div class="nav-count">${count}</div></button>`;
       });
       target.innerHTML = html;
 
@@ -1220,7 +1220,7 @@ input,textarea,select{font:inherit;color:inherit}
             html += `
               <div class="section-header" id="cat-${cat.id}">
                 <h2 class="section-title">
-                  <div class="category-dot" style="background:${categoryColors[cat.id]}"></div>
+                  <div class="category-dot" style="background:${categoryColors[cat.id] || 'var(--color-primary)'}"></div>
                   <span id="cat-name-display-${cat.id}">${cat.name}</span>
                   ${cat.id === 'inbox' && cat.tasks.filter(t=>!t.done).length > 0 ? `<button class="btn-primary" style="margin-left: 12px; padding: 4px 10px; font-size: 11px; display:flex; align-items:center; gap:4px;" onclick="startClarifyWizard()"><i data-lucide="wand-2" style="width:12px;height:12px;"></i> Clarify Wizard</button>` : ''}
                   <input type="text" id="cat-name-input-${cat.id}" value="${cat.name}" style="display:none; font-size:var(--text-base); font-weight:600; font-family:var(--font-body); background:transparent; color:var(--color-text); border:1px solid var(--color-primary); border-radius:var(--radius-sm); padding:2px 6px; width:200px; outline:none;">
@@ -1606,7 +1606,7 @@ input,textarea,select{font:inherit;color:inherit}
 
       flowSvg.on("click", (event) => {
           if (event.defaultPrevented) return;
-          window.zoomToNode(flowRoot);
+          window.zoomToNode(null);
       });
 
       let flowFocus = flowRoot;
@@ -1682,6 +1682,22 @@ input,textarea,select{font:inherit;color:inherit}
 
       window.zoomToNode = function(d, highlightTaskId = null) {
           if (!flowSvg) return;
+
+          const panel = document.getElementById('flow-side-panel');
+
+          if (!d) {
+              if (panel) panel.style.display = 'none';
+              const initialK = 1.0;
+              flowSvg.transition().duration(650).call(zoom.transform, d3.zoomIdentity.translate(width * 0.25, height / 2).scale(initialK));
+
+              gContainer.selectAll("g.node-group").transition().duration(650).style("opacity", 1);
+              gContainer.selectAll(".link").transition().duration(650).style("opacity", 1);
+
+              flowFocus = null;
+              window.lastFlowFocusId = null;
+              return;
+          }
+
           flowFocus = d;
           window.lastFlowFocusId = d.data.id || d.data.taskId;
 
@@ -1698,7 +1714,6 @@ input,textarea,select{font:inherit;color:inherit}
 
           flowSvg.transition().duration(650).call(zoom.transform, d3.zoomIdentity.translate(targetX, targetY).scale(k));
 
-          const panel = document.getElementById('flow-side-panel');
           if (!panel) return;
 
           if (!d) {
@@ -1725,7 +1740,7 @@ input,textarea,select{font:inherit;color:inherit}
 
               let titleHtml = `
                  <div style="display:flex; align-items:center; gap:8px; overflow:hidden; flex:1;">
-                   <div class="category-dot" style="background:${d.data.isStuck ? 'var(--color-high)' : d.data.color}; flex-shrink: 0; width: 12px; height: 12px;"></div>
+                   <div class="category-dot" style="background:${d.data.isStuck ? 'var(--color-high)' : (d.data.color || 'var(--color-primary)')}; flex-shrink: 0; width: 12px; height: 12px;"></div>
                    <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${d.data.name}">${d.data.name}</span>
                  </div>
                  <button class="btn-secondary" style="padding: 4px 8px; font-size: 11px; border:none; background:var(--color-surface-2); color:var(--color-text); flex-shrink:0;" onclick="switchView('list', true); setNavFilter('${filterTarget}');">View List <i data-lucide="arrow-right" style="width:12px;height:12px;"></i></button>
