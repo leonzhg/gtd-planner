@@ -10,7 +10,7 @@
 
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>GTD Pro Planner (v70)</title>
+<title>GTD Pro Planner (v75)</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300..700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
@@ -287,6 +287,14 @@ input,textarea,select{font:inherit;color:inherit}
 }
 /* --- END RESPONSIVE LAYOUT --- */
 
+
+
+@media (max-width: 768px) {
+  .task-card { grid-template-columns: 22px minmax(0,1fr) auto !important; }
+  .task-content { min-width: 0 !important; }
+  .task-title { overflow-wrap: anywhere; }
+  .section-header { gap: 8px; flex-wrap: wrap; }
+}
 
 </style>
 
@@ -571,17 +579,21 @@ input,textarea,select{font:inherit;color:inherit}
   <!-- Share Modal -->
   <div class="modal-overlay" id="share-modal">
     <div class="modal" style="width: 400px;">
-      <h3><i data-lucide="share"></i> Share / Export View</h3>
+      <h3><i data-lucide="whatsapp"></i> Share to WhatsApp</h3>
       <div class="review-text">
-        Export or share your active tasks instantly.
+        Send a snapshot of your active GTD lists as a WhatsApp message.
       </div>
-      <div style="display: flex; flex-direction: column; gap: var(--space-3); margin-top: var(--space-4);">
-        <button class="btn-secondary" style="justify-content: center; padding: 12px; display: flex; align-items: center; gap: 8px; background: var(--color-primary); color: white; border: none;" onclick="nativeShare()"><i data-lucide="share-2" style="width:16px;height:16px;"></i> Share to App (WhatsApp, Messenger, etc.)</button>
-        <button class="btn-secondary" style="justify-content: center; padding: 12px; display: flex; align-items: center; gap: 8px;" onclick="printToPDF()"><i data-lucide="printer" style="width:16px;height:16px;"></i> Print / Save as PDF</button>
-        <button class="btn-secondary" style="justify-content: center; padding: 12px; display: flex; align-items: center; gap: 8px;" onclick="sendViaEmail()"><i data-lucide="mail" style="width:16px;height:16px;"></i> Send via Email</button>
-        <button class="btn-secondary" style="justify-content: center; padding: 12px; display: flex; align-items: center; gap: 8px;" onclick="copyAsText()"><i data-lucide="clipboard" style="width:16px;height:16px;"></i> Copy as Text</button>
+      <div style="display:flex; flex-direction:column; gap:var(--space-3); margin-top:var(--space-4);">
+        <button class="btn-secondary" style="justify-content:center; padding:12px; display:flex; align-items:center; gap:8px; background:#25D366; color:white; border:none;" onclick="shareAllToWhatsApp()">
+          <i data-lucide="send" style="width:16px;height:16px;"></i>
+          <span>Share all active lists to WhatsApp</span>
+        </button>
+        <button class="btn-secondary" style="justify-content:center; padding:12px; display:flex; align-items:center; gap:8px;" onclick="copyAsText()">
+          <i data-lucide="clipboard" style="width:16px;height:16px;"></i>
+          <span>Copy as plain text (fallback)</span>
+        </button>
       </div>
-      <div class="modal-actions" style="margin-top: 24px;">
+      <div class="modal-actions" style="margin-top:24px;">
         <button class="btn-secondary" onclick="closeModal('share-modal')">Close</button>
       </div>
     </div>
@@ -847,7 +859,6 @@ input,textarea,select{font:inherit;color:inherit}
     // GTD State with Projects and Due Dates
     let state = {
       schemaVersion: 2,
-      sortMode: "deadline",
       archive: [],
       trash: [],
       activeNav: "all",
@@ -1178,7 +1189,44 @@ input,textarea,select{font:inherit;color:inherit}
       return Number.MAX_SAFE_INTEGER;
     }
 
-    function sortTasksForDisplay(tasks, catId, sourceType = 'active') {
+    function sortCategoryByDeadline(catId) {
+  const cat = state.categories.find(c => c.id === catId);
+  if (!cat || !Array.isArray(cat.tasks) || cat.tasks.length === 0) {
+    showToast('No tasks to sort in this group.');
+    return;
+  }
+  const active = cat.tasks.filter(t => !t.done);
+  const done = cat.tasks.filter(t => t.done);
+  cat.tasks = [...sortTasksForDisplay(active, catId, 'active'), ...done];
+  saveState();
+  updateAll();
+  showToast('Group sorted by deadline.');
+}
+
+function moveTaskToCategory(fromCatId, taskId, targetCatId) {
+  const fromCat = state.categories.find(c => c.id === fromCatId);
+  const targetCat = state.categories.find(c => c.id === targetCatId);
+  if (!fromCat || !targetCat) return;
+  const idx = fromCat.tasks.findIndex(t => t.id === taskId);
+  if (idx === -1) return;
+  const task = fromCat.tasks[idx];
+  if (fromCatId !== targetCatId) {
+    const ok = confirm(`Move "${task.title}" from "${fromCat.name}" to "${targetCat.name}"?`);
+    if (!ok) return;
+  }
+  fromCat.tasks.splice(idx, 1);
+  if (targetCatId === 'scheduled' && !task.dueDate) {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    task.dueDate = tomorrow.toISOString().split('T')[0];
+  }
+  targetCat.tasks.push(task);
+  saveState();
+  updateAll();
+  showToast(`Moved to ${targetCat.name}.`);
+}
+
+function sortTasksForDisplay(tasks, catId, sourceType = 'active') {
       const arr = [...(tasks || [])];
       if (sourceType === 'archive') return arr.sort((a,b) => (b.archivedAt || '').localeCompare(a.archivedAt || ''));
       if (sourceType === 'trash') return arr;
@@ -1251,7 +1299,7 @@ input,textarea,select{font:inherit;color:inherit}
              </div>
           </div>
           <div class="section-header" style="margin-top: var(--space-4);">
-            <h2 class="section-title"><i data-lucide="list"></i> ${isPriorityFilter ? getPriorityMeta(priorityTarget==='unassigned' ? '' : priorityTarget).label : 'All Tasks'} <span class="task-tag" style="margin-left:8px;">Sorted by deadline</span></h2>
+            <h2 class="section-title"><i data-lucide="list"></i> ${isPriorityFilter ? getPriorityMeta(priorityTarget==='unassigned' ? '' : priorityTarget).label : 'All Tasks'} <span class="task-tag" style="margin-left:8px;">Sort by deadline</span></h2>
           </div>
           `;
       }
@@ -1320,6 +1368,8 @@ input,textarea,select{font:inherit;color:inherit}
                   <button class="action-btn" id="cat-edit-btn-${cat.id}" onclick="startInlineEditCategory('${cat.id}')" style="opacity:0.5; margin-left: 4px;" title="Edit Category Name">
                     <i data-lucide="edit-2" style="width:16px;height:16px;"></i>
                   </button>
+                  ${cat.id !== 'projects' && !isArchiveView && !isTrashView ? `<button class="action-btn" onclick="sortCategoryByDeadline('${cat.id}')" style="opacity:0.8; margin-left: 4px;" title="Sort this group by deadline"><i data-lucide="calendar-range" style="width:16px;height:16px;"></i></button>` : ''}
+                  ${cat.id !== 'projects' && !isArchiveView && !isTrashView ? `<button class="action-btn" onclick="shareCategoryToWhatsApp('${cat.id}')" style="opacity:0.8; margin-left: 4px;" title="Share this group to WhatsApp"><i data-lucide="whatsapp" style="width:16px;height:16px;"></i></button>` : ''}
                 </h2>
                 <button class="btn-add" onclick="${cat.id === 'projects' ? 'openProjectModal()' : `openModal('${cat.id}')`}"><i data-lucide="plus"></i> ${cat.id === 'projects' ? 'Add Project' : 'Add Task'}</button>
               </div>`;
@@ -1327,7 +1377,7 @@ input,textarea,select{font:inherit;color:inherit}
             html += `<h3 style="font-size:var(--text-xs); color:var(--color-text-muted); margin-top:var(--space-6); margin-bottom:var(--space-2); text-transform:uppercase; letter-spacing:0.05em;">${cat.name}</h3>`;
         }
 
-        html += `<div class="tasks-grid" id="grid-${cat.id}" data-cat="${cat.id}">`;
+        html += `<div class="tasks-grid" id="grid-${cat.id}" data-cat="${cat.id}" ondragover="allowDrop(event)" ondrop="try { const d = JSON.parse(event.dataTransfer.getData('application/json')); moveTaskToCategory(d.catId, d.taskId, '${cat.id}'); } catch(e) { console.error(e); }">`;
         if (cat.tasks.length === 0 && !isProjectView && !isArchiveView && !isTrashView) html += `<div style="color:var(--color-text-faint); font-size:var(--text-xs); padding:var(--space-2)">No tasks in this list.</div>`;
         if (cat.tasks.length === 0 && isTrashView) html += `<div style="color:var(--color-text-faint); font-size:var(--text-xs); padding:var(--space-2)">Trash is empty.</div>`;
 
@@ -1970,12 +2020,9 @@ function migrateStateSchema(inputState) {
   }
 
   if (version < 2) {
-      if (!inputState.sortMode) inputState.sortMode = 'deadline';
       inputState.schemaVersion = 2;
       version = 2;
   }
-
-  if (!inputState.sortMode) inputState.sortMode = 'deadline';
   if (!Array.isArray(inputState.archive)) inputState.archive = [];
   if (!Array.isArray(inputState.trash)) inputState.trash = [];
   if (typeof inputState.activeNav === 'undefined') inputState.activeNav = 'all';
@@ -2383,6 +2430,57 @@ function restoreSnapshot(index) {
     showToast('History restored successfully!');
 }
 
+
+function formatTasksForWhatsApp(categoryFilterId) {
+  var text = '*GTD Planner - Active Tasks*\n\n';
+  var cats = Array.isArray(state && state.categories) ? state.categories : [];
+  cats.forEach(function(cat) {
+    if (!cat || cat.id === 'projects') return;
+    if (categoryFilterId && cat.id !== categoryFilterId) return;
+    var tasks = Array.isArray(cat.tasks) ? cat.tasks : [];
+    var activeTasks = sortTasksForDisplay(tasks.filter(function(t) { return t && !t.done; }), cat.id, 'active');
+    if (!activeTasks.length) return;
+    text += '*' + String(cat.name || '').toUpperCase() + '*\n';
+    activeTasks.forEach(function(t) {
+      if (!t) return;
+      var prio = t.priority ? '[' + String(t.priority).toUpperCase() + '] ' : '';
+      var due = t.dueDate ? ' (due ' + t.dueDate + ')' : '';
+      text += '\u2022 ' + prio + String(t.title || '') + due + '\n';
+    });
+    text += '\n';
+  });
+  return text.trim();
+}
+
+function openWhatsAppWithText(text) {
+  if (!text || !text.trim()) {
+    if (typeof showToast === 'function') showToast('Nothing to share.');
+    return;
+  }
+  var encoded = encodeURIComponent(text);
+  var url = 'https://wa.me/?text=' + encoded;
+  window.open(url, '_blank');
+}
+
+function shareAllToWhatsApp() {
+  var text = formatTasksForWhatsApp(null);
+  if (!text || !text.trim()) {
+    if (typeof showToast === 'function') showToast('No active tasks to share.');
+    return;
+  }
+  openWhatsAppWithText(text);
+  if (typeof closeModal === 'function') closeModal('share-modal');
+}
+
+function shareCategoryToWhatsApp(catId) {
+  var text = formatTasksForWhatsApp(catId);
+  if (!text || !text.trim()) {
+    if (typeof showToast === 'function') showToast('No active tasks in this group to share.');
+    return;
+  }
+  openWhatsAppWithText(text);
+}
+
 function generateReadableText() {
     let text = "GTD Planner - Active Tasks\n\n";
     state.categories.forEach(cat => {
@@ -2427,7 +2525,7 @@ function generatePrintHTML() {
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="GTD Planner">
 
-        <title>GTD Pro Planner (v70)</title>
+        <title>GTD Pro Planner (v75)</title>
         <style>
             body { font-family: 'Inter', sans-serif; padding: 40px; max-width: 800px; margin: 0 auto; color: #333; line-height: 1.5; }
             @media print { body { padding: 0; } }
@@ -2508,6 +2606,14 @@ function generatePrintHTML() {
 }
 /* --- END RESPONSIVE LAYOUT --- */
 
+
+
+@media (max-width: 768px) {
+  .task-card { grid-template-columns: 22px minmax(0,1fr) auto !important; }
+  .task-content { min-width: 0 !important; }
+  .task-title { overflow-wrap: anywhere; }
+  .section-header { gap: 8px; flex-wrap: wrap; }
+}
 
 </style>
     </head>
