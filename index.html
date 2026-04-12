@@ -206,6 +206,79 @@ input,textarea,select{font:inherit;color:inherit}
 
     .hover-bg:hover { background: var(--color-surface-offset); border-color: var(--color-primary) !important; }
 
+
+/* --- MOBILE RESPONSIVENESS --- */
+@media (max-width: 768px) {
+  .app-container { flex-direction: column; }
+
+  /* Sidebar becomes a scrollable horizontal top bar */
+  .sidebar { 
+    width: 100%; 
+    height: auto; 
+    flex-direction: row; 
+    overflow-x: auto; 
+    padding: var(--space-2); 
+    border-right: none; 
+    border-bottom: 1px solid var(--color-divider);
+    flex-shrink: 0;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .sidebar-header { display: none; } /* Hide logo to save space */
+  .nav-group { 
+    display: flex; 
+    flex-direction: row; 
+    gap: var(--space-1); 
+    margin: 0; 
+    align-items: center;
+  }
+  .nav-group-title { display: none; }
+  .nav-item { 
+    padding: var(--space-2) var(--space-3); 
+    border-radius: var(--radius-full); 
+    white-space: nowrap;
+    background: var(--color-surface-offset);
+  }
+  .nav-item.active {
+    background: var(--color-primary-highlight);
+  }
+
+  /* Header */
+  .header { padding: var(--space-3); flex-direction: column; gap: var(--space-3); align-items: flex-start; height: auto; }
+  .header-actions { width: 100%; justify-content: space-between; }
+
+  /* Main Content */
+  .main-content { padding: 0; }
+  .content-header { padding: var(--space-4); flex-direction: column; gap: var(--space-3); align-items: flex-start; }
+  .view-controls { width: 100%; justify-content: space-between; }
+  .view-controls button { flex: 1; }
+
+  /* Tasks List */
+  .list-view-content { padding: var(--space-4); }
+  .task-card { padding: var(--space-3); }
+  .task-meta { flex-wrap: wrap; }
+
+  /* Dashboard */
+  .dashboard-grid { grid-template-columns: 1fr 1fr; }
+
+  /* Flow View */
+  #view-flow { flex-direction: column !important; padding: var(--space-3) !important; gap: var(--space-2) !important; }
+  #flow-side-panel { width: 100% !important; height: 50% !important; border-left: none; }
+
+  /* Priority Matrix */
+  .priority-layout { flex-direction: column; }
+  .priority-sidebar { width: 100%; height: 250px; border-right: none; border-bottom: 1px solid var(--color-border); }
+  .eisenhower-grid { grid-template-columns: 1fr; gap: var(--space-3); }
+
+  /* Modals */
+  .modal { width: 95% !important; padding: var(--space-4); margin: auto; }
+  #clarify-modal .modal { max-height: 90vh; }
+
+  /* Quick Hide on Mobile */
+  .hide-on-mobile { display: none !important; }
+}
+/* --- END MOBILE RESPONSIVENESS --- */
+
 </style>
 
 <!-- Firebase SDKs -->
@@ -256,7 +329,7 @@ input,textarea,select{font:inherit;color:inherit}
         </button>
         <input type="file" id="import-file-input" accept=".json" style="display:none" onchange="importBackup(event)">
         <div class="view-toggle">
-          <button class="view-btn active" id="btn-list" onclick="switchView('list')">
+          <button class="view-btn active" id="btn-list" ondblclick="startClarifyWizard(d.data.catId || d.data.id || currentProjId || 'projects', '${task.id}')" onclick="switchView('list')">
             <i data-lucide="list"></i> List View
           </button>
           <button class="view-btn" id="btn-flow" onclick="switchView('flow')">
@@ -451,10 +524,7 @@ input,textarea,select{font:inherit;color:inherit}
         <label>Project Name</label>
         <input type="text" id="project-title-input" placeholder="e.g. Website Redesign">
       </div>
-      <div class="form-group">
-        <label>Estimated Time (minutes)</label>
-        <input type="number" id="project-time-input" value="60" min="5" step="5">
-      </div>
+
       <div class="modal-actions">
         <button class="btn-secondary" onclick="closeModal('project-modal')">Cancel</button>
         <button class="btn-primary" onclick="saveProjectModal()">Save Project</button>
@@ -508,9 +578,15 @@ input,textarea,select{font:inherit;color:inherit}
   <div class="modal-overlay" id="clarify-modal">
     <div class="modal" style="width: 500px; max-height: 90vh; display: flex; flex-direction: column;">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--space-4); padding-bottom: var(--space-3); border-bottom: 1px solid var(--color-divider);">
-        <h3 style="display: flex; align-items: center; gap: 8px; margin: 0; color: var(--color-primary);">
-          <i data-lucide="inbox"></i> Clarify Inbox (<span id="clarify-count">0</span> left)
-        </h3>
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <h3 style="display: flex; align-items: center; gap: 8px; margin: 0; color: var(--color-primary);">
+            <i data-lucide="wand-2"></i> Clarify (<span id="clarify-index-display">0/0</span>)
+          </h3>
+          <div style="display:flex; gap:4px;">
+            <button class="action-btn" id="clarify-prev-btn" onclick="prevClarifyTask()" title="Previous Item"><i data-lucide="chevron-left" style="width: 16px; height: 16px;"></i></button>
+            <button class="action-btn" id="clarify-next-btn" onclick="nextClarifyTask()" title="Next Item"><i data-lucide="chevron-right" style="width: 16px; height: 16px;"></i></button>
+          </div>
+        </div>
         <button class="action-btn" onclick="closeClarifyWizard()" title="Close Wizard"><i data-lucide="x" style="width: 18px; height: 18px;"></i></button>
       </div>
 
@@ -672,7 +748,7 @@ input,textarea,select{font:inherit;color:inherit}
         editingProjectId = null;
         document.getElementById('project-modal-title').innerHTML = '<i data-lucide="folder-tree"></i> New Project';
         document.getElementById('project-title-input').value = '';
-        document.getElementById('project-time-input').value = 60;
+        
         document.getElementById('project-modal').classList.add('active');
         document.getElementById('project-title-input').focus();
     }
@@ -685,7 +761,7 @@ input,textarea,select{font:inherit;color:inherit}
 
         document.getElementById('project-modal-title').innerHTML = '<i data-lucide="edit-2"></i> Edit Project Name';
         document.getElementById('project-title-input').value = proj.title;
-        document.getElementById('project-time-input').value = proj.time || 60;
+        
         document.getElementById('project-modal').classList.add('active');
         document.getElementById('project-title-input').focus();
     }
@@ -707,7 +783,6 @@ input,textarea,select{font:inherit;color:inherit}
 
     function saveProjectModal() {
         const title = document.getElementById('project-title-input').value.trim();
-        const time = parseInt(document.getElementById('project-time-input').value, 10) || 60;
         if (!title) return;
 
         const projCat = state.categories.find(c => c.id === 'projects');
@@ -716,13 +791,11 @@ input,textarea,select{font:inherit;color:inherit}
             const proj = projCat.tasks.find(p => p.id === editingProjectId);
             if (proj) {
                 proj.title = title;
-                proj.time = time;
             }
         } else {
             projCat.tasks.push({
                 id: "t" + Date.now(),
                 title: title,
-                time: time,
                 priority: "q2",
                 tags: ["Project"],
                 done: false
@@ -1273,7 +1346,8 @@ input,textarea,select{font:inherit;color:inherit}
           return; // skip normal task rendering for this category
         }
 
-        cat.tasks.forEach(task => {
+        const displayTasks = sortTasksForDisplay(cat.tasks, cat.id, isArchiveView ? 'archive' : isTrashView ? 'trash' : 'active');
+        displayTasks.forEach(task => {
           const priorityMeta = getPriorityMeta(task.priority);
           const priorityClass = priorityMeta.className;
           let projLinkHtml = '';
@@ -1290,11 +1364,12 @@ input,textarea,select{font:inherit;color:inherit}
             <div class="task-card ${task.done ? 'done' : ''}" id="task-${task.id}" data-id="${task.id}" 
                 draggable="${(!isArchiveView && !isTrashView) ? 'true' : 'false'}" 
                 ondragstart="${(!isArchiveView && !isTrashView) ? `event.dataTransfer.setData('application/json', JSON.stringify({catId: '${cat.id}', taskId: '${task.id}'}))` : ''}" 
-                style="border-left: 3px solid ${borderColor}">
+                onclick="editTaskModal('${cat.id}', '${task.id}')" 
+                ondblclick="event.stopPropagation(); startClarifyWizard('${cat.id}', '${task.id}')" style="border-left: 3px solid ${borderColor}">
           `;
 
           if (!isArchiveView && !isTrashView) {
-              html += `<div class="task-check ${task.done ? 'checked' : ''}" onclick="toggleTask('${cat.id}', '${task.id}')">
+              html += `<div class="task-check ${task.done ? 'checked' : ''}" onclick="event.stopPropagation(); toggleTask('${cat.id}', '${task.id}')">
                 <i data-lucide="check" style="width:12px;height:12px;color:white;display:${task.done?'block':'none'}"></i>
               </div>`;
           } else {
@@ -1317,12 +1392,12 @@ input,textarea,select{font:inherit;color:inherit}
 
           if (isArchiveView) {
               html += `
-                <button class="action-btn" onclick="restoreTask('archive', '${task.id}')" title="Restore to Inbox"><i data-lucide="refresh-ccw" style="width:16px;height:16px;"></i></button>
+                <button class="action-btn" onclick="event.stopPropagation(); restoreTask('archive', '${task.id}')" title="Restore to Inbox"><i data-lucide="refresh-ccw" style="width:16px;height:16px;"></i></button>
               `;
           } 
           else if (isTrashView) {
               html += `
-                <button class="action-btn" onclick="restoreTask('trash', '${task.id}')" title="Restore to Inbox"><i data-lucide="refresh-ccw" style="width:16px;height:16px;"></i></button>
+                <button class="action-btn" onclick="event.stopPropagation(); restoreTask('trash', '${task.id}')" title="Restore to Inbox"><i data-lucide="refresh-ccw" style="width:16px;height:16px;"></i></button>
                 <button class="action-btn delete" onclick="permadeleteTask('${task.id}')" title="Permanently Delete"><i data-lucide="trash-2" style="width:16px;height:16px;"></i></button>
               `;
           } 
@@ -1333,10 +1408,10 @@ input,textarea,select{font:inherit;color:inherit}
               if (!task.done) {
                   html += `<button class="action-btn" onclick="changePriority('${cat.id}', '${task.id}', 'up')" title="Increase Priority" ${task.priority === 'q1' ? 'disabled style="opacity:0.3;cursor:not-allowed;"' : ''}><i data-lucide="arrow-up" style="width:16px;height:16px;"></i></button>
                            <button class="action-btn" onclick="changePriority('${cat.id}', '${task.id}', 'down')" title="Decrease Priority" ${(!task.priority || task.priority === 'q4') ? 'disabled style="opacity:0.3;cursor:not-allowed;"' : ''}><i data-lucide="arrow-down" style="width:16px;height:16px;"></i></button>
-                           <button class="action-btn delete" onclick="deleteTask('${cat.id}', '${task.id}')" title="Move to Trash"><i data-lucide="trash-2" style="width:16px;height:16px;"></i></button>`;
+                           <button class="action-btn delete" onclick="event.stopPropagation(); deleteTask('${cat.id}', '${task.id}')" title="Move to Trash"><i data-lucide="trash-2" style="width:16px;height:16px;"></i></button>`;
               } else {
                   // For done tasks, strictly replace Trash with Archive button
-                  html += `<button class="action-btn archive-btn" onclick="archiveTask('${cat.id}', '${task.id}')" title="Archive Task" style="background:var(--color-primary-highlight);color:var(--color-primary);opacity:1;"><i data-lucide="archive" style="width:16px;height:16px;"></i></button>`;
+                  html += `<button class="action-btn archive-btn" onclick="event.stopPropagation(); archiveTask('${cat.id}', '${task.id}')" title="Archive Task" style="background:var(--color-primary-highlight);color:var(--color-primary);opacity:1;"><i data-lucide="archive" style="width:16px;height:16px;"></i></button>`;
               }
           }
 
@@ -1744,7 +1819,7 @@ input,textarea,select{font:inherit;color:inherit}
                    <div class="category-dot" style="background:${d.data.isStuck ? 'var(--color-high)' : (d.data.color || 'var(--color-primary)')}; flex-shrink: 0; width: 12px; height: 12px;"></div>
                    <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${d.data.name}">${d.data.name}</span>
                  </div>
-                 <button class="btn-secondary" style="padding: 4px 8px; font-size: 11px; border:none; background:var(--color-surface-2); color:var(--color-text); flex-shrink:0;" onclick="switchView('list', true); setNavFilter('${filterTarget}');">View List <i data-lucide="arrow-right" style="width:12px;height:12px;"></i></button>
+                 <button class="btn-secondary" style="padding: 4px 8px; font-size: 11px; border:none; background:var(--color-surface-2); color:var(--color-text); flex-shrink:0;" ondblclick="startClarifyWizard('${d.data.catId || d.data.id || 'projects'}')" onclick="switchView('list', true); setNavFilter('${filterTarget}');">View List <i data-lucide="arrow-right" style="width:12px;height:12px;"></i></button>
               `;
 
               document.getElementById('flow-panel-title').innerHTML = titleHtml;
@@ -1788,9 +1863,14 @@ input,textarea,select{font:inherit;color:inherit}
                     const priHtml = task.priority ? `<span class="task-tag ${meta.className}" style="font-size:10px;">${meta.label}</span>` : '';
                     const dueHtml = task.dueDate ? `<span class="task-tag" style="background:var(--color-high);color:white;font-size:10px;"><i data-lucide="calendar" style="width:10px;height:10px;"></i> ${task.dueDate}</span>` : '';
 
+                    const flowCatId = d.data.catId || d.data.id || 'projects';
+                    const flowProjectId = task.projectId || '';
+                    const filterTarget = flowProjectId ? 'project-' + flowProjectId : flowCatId;
+
                     html += `
                       <div class="task-card" id="flow-task-${task.id}" style="padding: 10px 12px; border-left: 3px solid ${d.data.isStuck ? 'var(--color-high)' : d.data.color}; cursor: pointer; transition: all 0.2s;" 
-                           onclick="switchView('list', true); setNavFilter('${task.projectId ? 'project-'+task.projectId : task.catId || d.data.id}'); setTimeout(()=>document.getElementById('task-${task.id}').scrollIntoView({behavior:'smooth', block:'center'}), 50);">
+                           onclick="switchView('list', true); setNavFilter('${filterTarget}'); setTimeout(() => { const el = document.getElementById('task-${task.id}'); if (el) el.scrollIntoView({behavior:'smooth', block:'center'}); }, 50)"
+                           ondblclick="event.stopPropagation(); startClarifyWizard('${flowCatId}', '${task.id}')">
                          <div class="task-title" style="margin-bottom: 6px; font-size:13px; font-weight:600;">${task.title}</div>
                          <div style="display:flex; gap: 4px; flex-wrap:wrap; align-items:center;">
                             ${task.time ? `<span class="task-tag" style="font-size:10px;"><i data-lucide="clock" style="width:10px;height:10px;"></i> ${task.time}m</span>` : ''}
@@ -1911,7 +1991,7 @@ function renderPriorityTaskCard(task, catId) {
   const timeHtml = task.time ? `<span class="pill" style="font-size:10px;padding:2px 6px;">${task.time}m</span>` : '';
   const priHtml = task.priority ? `<span class="pill ${meta.className}" style="font-size:10px;padding:2px 6px;">${meta.label}</span>` : '';
   return `
-    <div class="priority-card" draggable="true" ondragstart='event.dataTransfer.setData("application/json", JSON.stringify({ taskId: "${task.id}", catId: "${catId}" }))'>
+    <div class="priority-card" draggable="true" onclick="editTaskModal('${catId}', '${task.id}')" ondblclick="event.stopPropagation(); startClarifyWizard('${catId}', '${task.id}')" ondragstart='event.dataTransfer.setData("application/json", JSON.stringify({ taskId: "${task.id}", catId: "${catId}" }))'>
       <div style="font-weight:600; margin-bottom:6px; font-size:13px;">${task.title}</div>
       <div style="font-size:12px; color:var(--color-text-muted); display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
         <span style="font-size:10px; text-transform:uppercase; letter-spacing:0.05em;">${catId}</span>
@@ -2290,6 +2370,79 @@ function generatePrintHTML() {
         
     .hover-bg:hover { background: var(--color-surface-offset); border-color: var(--color-primary) !important; }
 
+
+/* --- MOBILE RESPONSIVENESS --- */
+@media (max-width: 768px) {
+  .app-container { flex-direction: column; }
+
+  /* Sidebar becomes a scrollable horizontal top bar */
+  .sidebar { 
+    width: 100%; 
+    height: auto; 
+    flex-direction: row; 
+    overflow-x: auto; 
+    padding: var(--space-2); 
+    border-right: none; 
+    border-bottom: 1px solid var(--color-divider);
+    flex-shrink: 0;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .sidebar-header { display: none; } /* Hide logo to save space */
+  .nav-group { 
+    display: flex; 
+    flex-direction: row; 
+    gap: var(--space-1); 
+    margin: 0; 
+    align-items: center;
+  }
+  .nav-group-title { display: none; }
+  .nav-item { 
+    padding: var(--space-2) var(--space-3); 
+    border-radius: var(--radius-full); 
+    white-space: nowrap;
+    background: var(--color-surface-offset);
+  }
+  .nav-item.active {
+    background: var(--color-primary-highlight);
+  }
+
+  /* Header */
+  .header { padding: var(--space-3); flex-direction: column; gap: var(--space-3); align-items: flex-start; height: auto; }
+  .header-actions { width: 100%; justify-content: space-between; }
+
+  /* Main Content */
+  .main-content { padding: 0; }
+  .content-header { padding: var(--space-4); flex-direction: column; gap: var(--space-3); align-items: flex-start; }
+  .view-controls { width: 100%; justify-content: space-between; }
+  .view-controls button { flex: 1; }
+
+  /* Tasks List */
+  .list-view-content { padding: var(--space-4); }
+  .task-card { padding: var(--space-3); }
+  .task-meta { flex-wrap: wrap; }
+
+  /* Dashboard */
+  .dashboard-grid { grid-template-columns: 1fr 1fr; }
+
+  /* Flow View */
+  #view-flow { flex-direction: column !important; padding: var(--space-3) !important; gap: var(--space-2) !important; }
+  #flow-side-panel { width: 100% !important; height: 50% !important; border-left: none; }
+
+  /* Priority Matrix */
+  .priority-layout { flex-direction: column; }
+  .priority-sidebar { width: 100%; height: 250px; border-right: none; border-bottom: 1px solid var(--color-border); }
+  .eisenhower-grid { grid-template-columns: 1fr; gap: var(--space-3); }
+
+  /* Modals */
+  .modal { width: 95% !important; padding: var(--space-4); margin: auto; }
+  #clarify-modal .modal { max-height: 90vh; }
+
+  /* Quick Hide on Mobile */
+  .hide-on-mobile { display: none !important; }
+}
+/* --- END MOBILE RESPONSIVENESS --- */
+
 </style>
     </head>
     <body>
@@ -2327,19 +2480,36 @@ function copyAsText() {
 
 
 
+
+
+
 // --- CLARIFY WIZARD LOGIC ---
 let clarifyQueue = [];
+let clarifyIndex = 0;
 let currentClarifyTask = null;
+let currentClarifyCatId = null;
 
-function startClarifyWizard() {
-    const inboxCat = state.categories.find(c => c.id === 'inbox');
-    if (!inboxCat || inboxCat.tasks.length === 0) {
-        showToast("Inbox is empty. Great job!");
+function startClarifyWizard(catId = 'inbox', taskId = null) {
+    closeModal('add-task-modal'); // if open
+
+    const cat = state.categories.find(c => c.id === catId);
+    if (!cat || cat.tasks.filter(t => !t.done).length === 0) {
+        showToast("No active tasks to clarify.");
         return;
     }
-    clarifyQueue = [...inboxCat.tasks];
+
+    currentClarifyCatId = catId;
+    clarifyQueue = cat.tasks.filter(t => !t.done);
+
+    if (taskId) {
+        const foundIdx = clarifyQueue.findIndex(t => t.id === taskId);
+        clarifyIndex = foundIdx > -1 ? foundIdx : 0;
+    } else {
+        clarifyIndex = 0;
+    }
+
     document.getElementById('clarify-modal').classList.add('active');
-    loadNextClarifyTask();
+    renderClarifyTask();
 }
 
 function closeClarifyWizard() {
@@ -2349,19 +2519,52 @@ function closeClarifyWizard() {
     updateAll();
 }
 
-function loadNextClarifyTask() {
+function saveClarifyDraft() {
+    if (!currentClarifyTask) return;
+    const input = document.getElementById('clarify-title-input');
+    if (input) currentClarifyTask.title = input.value.trim() || currentClarifyTask.title;
+}
+
+function prevClarifyTask() {
+    if (clarifyIndex > 0) {
+        saveClarifyDraft();
+        clarifyIndex--;
+        renderClarifyTask();
+    }
+}
+
+function nextClarifyTask() {
+    if (clarifyIndex < clarifyQueue.length - 1) {
+        saveClarifyDraft();
+        clarifyIndex++;
+        renderClarifyTask();
+    }
+}
+
+function renderClarifyTask() {
     if (clarifyQueue.length === 0) {
-        showToast("Inbox Zero achieved! 🎉");
+        showToast("All items processed! 🎉");
         closeClarifyWizard();
         return;
     }
 
-    currentClarifyTask = clarifyQueue[0];
-    document.getElementById('clarify-count').innerText = clarifyQueue.length;
+    if (clarifyIndex >= clarifyQueue.length) clarifyIndex = clarifyQueue.length - 1;
+
+    currentClarifyTask = clarifyQueue[clarifyIndex];
+    document.getElementById('clarify-index-display').innerText = `${clarifyIndex + 1} / ${clarifyQueue.length}`;
     document.getElementById('clarify-original-task').innerText = currentClarifyTask.title;
 
     const input = document.getElementById('clarify-title-input');
     input.value = currentClarifyTask.title;
+
+    const prevBtn = document.getElementById('clarify-prev-btn');
+    const nextBtn = document.getElementById('clarify-next-btn');
+    prevBtn.style.opacity = clarifyIndex === 0 ? "0.3" : "1";
+    prevBtn.style.pointerEvents = clarifyIndex === 0 ? "none" : "auto";
+    nextBtn.style.opacity = clarifyIndex === clarifyQueue.length - 1 ? "0.3" : "1";
+    nextBtn.style.pointerEvents = clarifyIndex === clarifyQueue.length - 1 ? "none" : "auto";
+
+    if (typeof lucide !== 'undefined') lucide.createIcons();
     input.focus();
     input.select();
 }
@@ -2369,15 +2572,14 @@ function loadNextClarifyTask() {
 function processClarify(action) {
     if (!currentClarifyTask) return;
 
-    const newTitle = document.getElementById('clarify-title-input').value.trim() || currentClarifyTask.title;
+    saveClarifyDraft();
 
-    // Remove from inbox in actual state
-    const inboxCat = state.categories.find(c => c.id === 'inbox');
-    const taskIdx = inboxCat.tasks.findIndex(t => t.id === currentClarifyTask.id);
-    if (taskIdx > -1) inboxCat.tasks.splice(taskIdx, 1);
-
-    // Update task title
-    currentClarifyTask.title = newTitle;
+    // Remove from actual state category
+    const cat = state.categories.find(c => c.id === currentClarifyCatId);
+    if (cat) {
+        const taskIdx = cat.tasks.findIndex(t => t.id === currentClarifyTask.id);
+        if (taskIdx > -1) cat.tasks.splice(taskIdx, 1);
+    }
 
     // Route it
     if (action === 'done') {
@@ -2386,28 +2588,35 @@ function processClarify(action) {
     } else if (action === 'trash') {
         state.trash.push(currentClarifyTask);
     } else if (action === 'projects') {
-        currentClarifyTask.tags = ["Project"];
-        currentClarifyTask.priority = "q2";
-        currentClarifyTask.time = 60;
-        state.categories.find(c => c.id === 'projects').tasks.push(currentClarifyTask);
-        // We could theoretically prompt for the next action here, but keeping it smooth for now
+        // Create new project out of this
+        state.categories.find(c => c.id === 'projects').tasks.push({
+             id: "t" + Date.now(),
+             title: currentClarifyTask.title,
+             priority: "q2",
+             tags: ["Project"],
+             done: false
+        });
     } else {
         // Move to specific category
         const target = state.categories.find(c => c.id === action);
         if (target) {
-            if (action === 'scheduled') {
+            if (action === 'scheduled' && !currentClarifyTask.dueDate) {
                 const tomorrow = new Date();
                 tomorrow.setDate(tomorrow.getDate() + 1);
-                currentClarifyTask.dueDate = tomorrow.toISOString().split('T')[0]; // Default to tomorrow
+                currentClarifyTask.dueDate = tomorrow.toISOString().split('T')[0];
             }
+            // Retain original project link if moving across categories but not transforming into a project
             target.tasks.push(currentClarifyTask);
         }
     }
 
-    // Move to next in queue
-    clarifyQueue.shift();
-    updateAll(); // Keep background map & lists synced instantly
-    loadNextClarifyTask();
+    // Remove from local queue
+    clarifyQueue.splice(clarifyIndex, 1);
+
+    // We don't advance the index because elements shifted left.
+    // We just render again.
+    updateAll(); // Keep background UI synced instantly
+    renderClarifyTask();
 }
 // --- END CLARIFY WIZARD LOGIC ---
 
