@@ -109,9 +109,41 @@ input,textarea,select{font:inherit;color:inherit}
 .task-tag{font-size:var(--text-xs);padding:2px 8px;border-radius:var(--radius-full);font-weight:500;background:var(--color-surface-offset)}
 .task-time{font-size:var(--text-xs);color:var(--color-text-faint);font-family:var(--font-mono);display:flex;align-items:center;gap:4px;}
 .task-priority-badge{font-size:var(--text-xs);padding:2px 8px;border-radius:var(--radius-full);font-weight:500}
-.priority-high{background:color-mix(in oklch,#a13544 15%,var(--color-surface));color:#a13544}
-.priority-med{background:color-mix(in oklch,#b4702b 15%,var(--color-surface));color:#b4702b}
-.priority-low{background:color-mix(in oklch,#3e7c53 15%,var(--color-surface));color:#3e7c53}
+.priority-q1{background:color-mix(in oklch,var(--color-high) 15%,var(--color-surface));color:var(--color-high)}
+    .priority-q2{background:color-mix(in oklch,#eab308 15%,var(--color-surface));color:#eab308}
+    .priority-q3{background:color-mix(in oklch,#22c55e 15%,var(--color-surface));color:#22c55e}
+    .priority-q4{background:color-mix(in oklch,var(--color-text-muted) 15%,var(--color-surface));color:var(--color-text-muted)}
+
+    /* Priority View CSS */
+    #view-priority { padding: 0; overflow: hidden; height: 100%; }
+    .priority-layout { display: grid; grid-template-columns: 320px 1fr; gap: 0; height: 100%; min-height: 0; }
+    .priority-sidebar { border-right: 1px solid var(--color-divider); background: var(--color-surface); display: flex; flex-direction: column; overflow: hidden; }
+    .priority-sidebar-header, .priority-matrix-header { padding: var(--space-4) var(--space-5); border-bottom: 1px solid var(--color-divider); background: var(--color-surface); position: sticky; top: 0; z-index: 2; flex-shrink: 0; }
+    .priority-task-pool { overflow-y: auto; padding: var(--space-4); display: flex; flex-direction: column; gap: var(--space-3); flex: 1; }
+    .priority-matrix-wrap { overflow-y: auto; background: var(--color-bg); }
+    .eisenhower-grid { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: var(--space-4); padding: var(--space-5); min-height: calc(100% - 70px); }
+    .quadrant { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-l); padding: var(--space-4); display: flex; flex-direction: column; min-height: 250px; }
+    .quadrant-title { font-weight: 700; margin-bottom: 4px; }
+    .quadrant-sub { font-size: 12px; color: var(--color-text-muted); margin-bottom: 12px; }
+    .quadrant-body { display: flex; flex-direction: column; gap: var(--space-3); min-height: 100px; flex: 1; }
+    .priority-card { background: var(--color-surface-2); border: 1px solid var(--color-border); border-radius: 14px; padding: 12px; cursor: grab; box-shadow: var(--shadow-s); transition: transform 0.1s; }
+    .priority-card:active { cursor: grabbing; transform: scale(0.98); }
+    .priority-sub { font-size: 12px; color: var(--color-text-muted); }
+    .priority-empty { color: var(--color-text-faint); font-size: 12px; padding: 12px; border: 1px dashed var(--color-border); border-radius: 12px; text-align: center; }
+
+    /* Dashboard CSS */
+    .dashboard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--space-4); margin-bottom: var(--space-5); }
+    .dash-card { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-l); padding: var(--space-4); display: flex; flex-direction: column; gap: var(--space-2); cursor: pointer; transition: all 0.2s ease; }
+    .dash-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-m); border-color: var(--color-primary); }
+    .dash-value { font-size: 24px; font-weight: 700; color: var(--color-primary); }
+    .dash-title { font-size: 14px; font-weight: 600; color: var(--color-text); }
+    .dash-sub { font-size: 12px; color: var(--color-text-muted); }
+
+    @media (max-width: 1100px) {
+      .priority-layout { grid-template-columns: 1fr; grid-template-rows: 300px 1fr; }
+      .priority-sidebar { border-right: none; border-bottom: 1px solid var(--color-divider); }
+      .eisenhower-grid { grid-template-columns: 1fr; grid-template-rows: auto; }
+    }
 .project-link{font-size:var(--text-xs); color:var(--color-primary); font-weight: 500; display:flex; align-items:center; gap:2px; background:var(--color-primary-highlight); padding:2px 6px; border-radius:4px;}
 
 .task-actions { display:flex; align-items:center; gap:2px; opacity: 0.2; transition: opacity var(--transition); }
@@ -221,6 +253,9 @@ input,textarea,select{font:inherit;color:inherit}
           <button class="view-btn" id="btn-flow" onclick="switchView('flow')">
             <i data-lucide="aperture"></i> Flow View
           </button>
+          <button class="view-btn" id="btn-priority" onclick="switchView('priority')">
+            <i data-lucide="grid-2x2"></i> Priority Matrix
+          </button>
         </div>
       </div>
     </div>
@@ -291,6 +326,52 @@ input,textarea,select{font:inherit;color:inherit}
       <div class="view-container" id="view-flow">
         <div id="flow-canvas"></div>
       </div>
+
+      <!-- PRIORITY VIEW -->
+      <div class="view-container" id="view-priority">
+        <div class="priority-layout">
+          <aside class="priority-sidebar">
+            <div class="priority-sidebar-header">
+              <h3 style="margin:0;display:flex;align-items:center;gap:8px;"><i data-lucide="list-todo"></i> Task Pool</h3>
+              <div class="priority-sub" style="margin-top:4px;">Drag unassigned tasks into the matrix</div>
+            </div>
+            <div id="priority-task-pool" class="priority-task-pool" ondragover="allowPriorityDrop(event)" ondrop="handlePriorityDrop(event, '')"></div>
+          </aside>
+
+          <section class="priority-matrix-wrap">
+            <div class="priority-matrix-header">
+              <h2 style="margin:0;">Eisenhower Matrix</h2>
+              <div class="priority-sub" style="margin-top:4px;">Drag to prioritize based on Urgency and Importance</div>
+            </div>
+
+            <div class="eisenhower-grid">
+              <div class="quadrant q1" ondragover="allowPriorityDrop(event)" ondrop="handlePriorityDrop(event, 'q1')">
+                <div class="quadrant-title" style="color:var(--color-high);">Q1: Urgent Red (Do First)</div>
+                <div class="quadrant-sub">Urgent + Important</div>
+                <div id="quadrant-q1" class="quadrant-body"></div>
+              </div>
+
+              <div class="quadrant q2" ondragover="allowPriorityDrop(event)" ondrop="handlePriorityDrop(event, 'q2')">
+                <div class="quadrant-title" style="color:#eab308;">Q2: Yellow (Schedule)</div>
+                <div class="quadrant-sub">Not Urgent + Important</div>
+                <div id="quadrant-q2" class="quadrant-body"></div>
+              </div>
+
+              <div class="quadrant q3" ondragover="allowPriorityDrop(event)" ondrop="handlePriorityDrop(event, 'q3')">
+                <div class="quadrant-title" style="color:#22c55e;">Q3: Green (Delegate)</div>
+                <div class="quadrant-sub">Urgent + Not Important</div>
+                <div id="quadrant-q3" class="quadrant-body"></div>
+              </div>
+
+              <div class="quadrant q4" ondragover="allowPriorityDrop(event)" ondrop="handlePriorityDrop(event, 'q4')">
+                <div class="quadrant-title" style="color:var(--color-text-muted);">Q4: Grey (Eliminate)</div>
+                <div class="quadrant-sub">Not Urgent + Not Important</div>
+                <div id="quadrant-q4" class="quadrant-body"></div>
+              </div>
+            </div>
+          </section>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -315,9 +396,11 @@ input,textarea,select{font:inherit;color:inherit}
         <div class="form-group">
           <label>Priority</label>
           <select id="task-priority-input">
-            <option value="low">Low</option>
-            <option value="med">Medium</option>
-            <option value="high">High</option>
+            <option value="">Unassigned</option>
+            <option value="q1">Q1: Urgent Red (Do First)</option>
+            <option value="q2">Q2: Yellow (Schedule)</option>
+            <option value="q3">Q3: Green (Delegate)</option>
+            <option value="q4">Q4: Grey (Eliminate)</option>
           </select>
         </div>
       </div>
@@ -496,7 +579,7 @@ input,textarea,select{font:inherit;color:inherit}
                 id: "t" + Date.now(),
                 title: title,
                 time: 60,
-                priority: "med",
+                priority: "q2",
                 tags: ["Project"],
                 done: false
             });
@@ -551,9 +634,10 @@ input,textarea,select{font:inherit;color:inherit}
       state.activeNav = navId;
       if (navId === 'all') window.lastFlowFocusId = null; // reset flow zoom memory on root view
 
-      // If we are in flow view and click a project or 'projects', switch to list view
+      // If we are in flow or priority view, return to list view on navigation change
       const isFlowActive = document.getElementById('view-flow').classList.contains('active');
-      if (isFlowActive && (navId.startsWith('project-') || navId === 'projects')) {
+      const isPriorityActive = document.getElementById('view-priority') && document.getElementById('view-priority').classList.contains('active');
+      if (isPriorityActive || (isFlowActive && (navId.startsWith('project-') || navId === 'projects'))) {
           switchView('list');
       }
 
@@ -690,11 +774,13 @@ input,textarea,select{font:inherit;color:inherit}
     }
 
     function changePriority(catId, taskId, direction) {
-      const levels = ['low', 'med', 'high'];
+      const levels = ['', 'q4', 'q3', 'q2', 'q1'];
       const cat = state.categories.find(c => c.id === catId);
       const task = cat.tasks.find(t => t.id === taskId);
+      if (typeof task.priority === 'undefined') task.priority = '';
       let idx = levels.indexOf(task.priority);
-      if (direction === 'up' && idx < 2) idx++;
+      if (idx === -1) idx = 0;
+      if (direction === 'up' && idx < levels.length - 1) idx++;
       if (direction === 'down' && idx > 0) idx--;
       task.priority = levels[idx];
       updateAll();
@@ -807,6 +893,56 @@ input,textarea,select{font:inherit;color:inherit}
       let currentProjId = isProjectView ? state.activeNav.split('-')[1] : null;
       let currentProj = currentProjId ? allProjects.find(p => p.id === currentProjId) : null;
 
+      
+      let isPriorityFilter = state.activeNav.startsWith('priority-');
+      let priorityTarget = isPriorityFilter ? state.activeNav.replace('priority-', '') : null;
+
+      if ((state.activeNav === 'all' || isPriorityFilter) && !isProjectView && !isArchiveView && !isTrashView) {
+          const allT = state.categories.filter(c => c.id !== 'projects').flatMap(c => c.tasks);
+          const q1Count = allT.filter(t => !t.done && t.priority === 'q1').length;
+          const q2Count = allT.filter(t => !t.done && t.priority === 'q2').length;
+          const q3Count = allT.filter(t => !t.done && t.priority === 'q3').length;
+          const q4Count = allT.filter(t => !t.done && t.priority === 'q4').length;
+          const noPriCount = allT.filter(t => !t.done && (!t.priority || t.priority === '')).length;
+
+          html += `
+          <div class="section-header" style="margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
+            <h2 class="section-title"><i data-lucide="layout-dashboard"></i> Priority Dashboard</h2>
+            ${isPriorityFilter ? `<button class="btn-secondary" onclick="setNavFilter('all')"><i data-lucide="x" style="width:14px;height:14px;"></i> Clear Filter</button>` : ''}
+          </div>
+          <div class="dashboard-grid">
+             <div class="dash-card" onclick="setNavFilter('priority-q1')" style="border-left: 3px solid var(--color-high); ${priorityTarget==='q1' ? 'background: var(--color-surface-2); border-color: var(--color-primary);' : ''}">
+               <div class="dash-title"><i data-lucide="alert-circle" style="width:14px;height:14px;color:var(--color-high);"></i> Q1: Urgent Red</div>
+               <div class="dash-value">${q1Count}</div>
+               <div class="dash-sub">Urgent & Important</div>
+             </div>
+             <div class="dash-card" onclick="setNavFilter('priority-q2')" style="border-left: 3px solid #eab308; ${priorityTarget==='q2' ? 'background: var(--color-surface-2); border-color: var(--color-primary);' : ''}">
+               <div class="dash-title"><i data-lucide="calendar" style="width:14px;height:14px;color:#eab308;"></i> Q2: Yellow</div>
+               <div class="dash-value">${q2Count}</div>
+               <div class="dash-sub">Important, not Urgent</div>
+             </div>
+             <div class="dash-card" onclick="setNavFilter('priority-q3')" style="border-left: 3px solid #22c55e; ${priorityTarget==='q3' ? 'background: var(--color-surface-2); border-color: var(--color-primary);' : ''}">
+               <div class="dash-title"><i data-lucide="users" style="width:14px;height:14px;color:#22c55e;"></i> Q3: Green</div>
+               <div class="dash-value">${q3Count}</div>
+               <div class="dash-sub">Urgent, not Important</div>
+             </div>
+             <div class="dash-card" onclick="setNavFilter('priority-q4')" style="border-left: 3px solid var(--color-text-muted); ${priorityTarget==='q4' ? 'background: var(--color-surface-2); border-color: var(--color-primary);' : ''}">
+               <div class="dash-title"><i data-lucide="x-circle" style="width:14px;height:14px;color:var(--color-text-muted);"></i> Q4: Grey</div>
+               <div class="dash-value">${q4Count}</div>
+               <div class="dash-sub">Eliminate</div>
+             </div>
+             <div class="dash-card" onclick="setNavFilter('priority-unassigned')" style="border-left: 3px dashed var(--color-text-muted); ${priorityTarget==='unassigned' ? 'background: var(--color-surface-2); border-color: var(--color-primary);' : ''}">
+               <div class="dash-title"><i data-lucide="inbox" style="width:14px;height:14px;color:var(--color-text-muted);"></i> Unassigned</div>
+               <div class="dash-value">${noPriCount}</div>
+               <div class="dash-sub">Needs priority assignment</div>
+             </div>
+          </div>
+          <div class="section-header" style="margin-top: var(--space-4);">
+            <h2 class="section-title"><i data-lucide="list"></i> ${isPriorityFilter ? getPriorityMeta(priorityTarget==='unassigned' ? '' : priorityTarget).label : 'All Tasks'}</h2>
+          </div>
+          `;
+      }
+
       if (isProjectView && currentProj) {
           html += `<div class="section-header">
             <h2 class="section-title" style="color:var(--color-primary)">
@@ -840,6 +976,16 @@ input,textarea,select{font:inherit;color:inherit}
             ${state.trash.length > 0 ? `<button class="btn-secondary" onclick="state.trash=[]; updateAll();"><i data-lucide="alert-triangle"></i> Empty Trash</button>` : ''}
           </div>`;
           catsToRender.push({ id: 'trash', name: 'Deleted Items', tasks: state.trash, color: 'var(--color-high)' });
+      }
+      else if (isPriorityFilter) {
+          state.categories.forEach(cat => {
+              if (cat.id === 'projects') return;
+              const matchingTasks = cat.tasks.filter(t => {
+                  if (priorityTarget === 'unassigned') return !t.priority || t.priority === '';
+                  return t.priority === priorityTarget;
+              });
+              if (matchingTasks.length > 0) catsToRender.push({ ...cat, tasks: matchingTasks });
+          });
       }
       else {
           catsToRender = state.activeNav === 'all' ? state.categories : state.categories.filter(c => c.id === state.activeNav);
@@ -905,7 +1051,8 @@ input,textarea,select{font:inherit;color:inherit}
         }
 
         cat.tasks.forEach(task => {
-          const priorityClass = task.priority === 'high' ? 'priority-high' : (task.priority === 'med' ? 'priority-med' : 'priority-low');
+          const priorityMeta = getPriorityMeta(task.priority);
+          const priorityClass = priorityMeta.className;
           let projLinkHtml = '';
           if (task.projectId && !isProjectView && !isTrashView && !isArchiveView) {
              const proj = allProjects.find(p => p.id === task.projectId);
@@ -935,7 +1082,7 @@ input,textarea,select{font:inherit;color:inherit}
               <div class="task-content">
                 <div class="task-title" style="${(isArchiveView || isTrashView) ? 'text-decoration:none; opacity:1;' : ''}">${task.title}</div>
                 <div class="task-meta">
-                  <span class="task-priority-badge ${priorityClass}">${task.priority.toUpperCase()}</span>
+                  ${task.priority ? `<span class="task-priority-badge ${priorityClass}">${priorityMeta.label}</span>` : ''}
                   <span class="task-time"><i data-lucide="clock" style="width:12px;height:12px;"></i> ${task.time}m</span>
                   ${dueHtml}
                   ${projLinkHtml}
@@ -961,8 +1108,8 @@ input,textarea,select{font:inherit;color:inherit}
               html += `<button class="action-btn" onclick="editTaskModal('${cat.id}', '${task.id}')" title="Edit Task Details"><i data-lucide="edit-2" style="width:16px;height:16px;"></i></button>`;
 
               if (!task.done) {
-                  html += `<button class="action-btn" onclick="changePriority('${cat.id}', '${task.id}', 'up')" title="Increase Priority" ${task.priority === 'high' ? 'disabled style="opacity:0.3;cursor:not-allowed;"' : ''}><i data-lucide="arrow-up" style="width:16px;height:16px;"></i></button>
-                           <button class="action-btn" onclick="changePriority('${cat.id}', '${task.id}', 'down')" title="Decrease Priority" ${task.priority === 'low' ? 'disabled style="opacity:0.3;cursor:not-allowed;"' : ''}><i data-lucide="arrow-down" style="width:16px;height:16px;"></i></button>
+                  html += `<button class="action-btn" onclick="changePriority('${cat.id}', '${task.id}', 'up')" title="Increase Priority" ${task.priority === 'q1' ? 'disabled style="opacity:0.3;cursor:not-allowed;"' : ''}><i data-lucide="arrow-up" style="width:16px;height:16px;"></i></button>
+                           <button class="action-btn" onclick="changePriority('${cat.id}', '${task.id}', 'down')" title="Decrease Priority" ${(!task.priority || task.priority === 'q4') ? 'disabled style="opacity:0.3;cursor:not-allowed;"' : ''}><i data-lucide="arrow-down" style="width:16px;height:16px;"></i></button>
                            <button class="action-btn delete" onclick="deleteTask('${cat.id}', '${task.id}')" title="Move to Trash"><i data-lucide="trash-2" style="width:16px;height:16px;"></i></button>`;
               } else {
                   // For done tasks, strictly replace Trash with Archive button
@@ -972,7 +1119,7 @@ input,textarea,select{font:inherit;color:inherit}
 
           html += `</div></div>`;
         });
-        html += `</div>`;
+        html += ``;
       });
       target.innerHTML = html;
       lucide.createIcons();
@@ -1047,7 +1194,7 @@ input,textarea,select{font:inherit;color:inherit}
       document.getElementById('task-title-input').value = task.title;
       document.getElementById('task-time-input').value = task.time || 30;
       document.getElementById('task-due-input').value = task.dueDate || '';
-      document.getElementById('task-priority-input').value = task.priority || 'low';
+      document.getElementById('task-priority-input').value = task.priority || '';
 
       document.getElementById('add-task-modal').classList.add('active');
       document.getElementById('task-title-input').focus();
@@ -1309,7 +1456,7 @@ input,textarea,select{font:inherit;color:inherit}
       const node = gContainer.selectAll("circle").data(flowRoot.descendants().slice(1)).join("circle")
           .attr("class", d => {
               let cls = d.children ? "node" : "node node--leaf";
-              if (!d.children && d.data.priority === 'high' && !d.data.done) cls += " node-high-priority";
+              if (!d.children && d.data.priority === 'q1' && !d.data.done) cls += " node-high-priority";
               return cls;
           })
           .attr("fill", d => {
@@ -1420,16 +1567,123 @@ input,textarea,select{font:inherit;color:inherit}
 
       flowInitialized = true;
     }
+
+// --- PRIORITY VIEW HELPERS ---
+function getPriorityMeta(priority) {
+  const map = {
+    q1: { label: 'Q1: Urgent Red (Do First)', className: 'priority-q1', icon: 'alert-circle', color: 'var(--color-high)' },
+    q2: { label: 'Q2: Yellow (Schedule)', className: 'priority-q2', icon: 'calendar', color: '#eab308' },
+    q3: { label: 'Q3: Green (Delegate)', className: 'priority-q3', icon: 'users', color: '#22c55e' },
+    q4: { label: 'Q4: Grey (Eliminate)', className: 'priority-q4', icon: 'x-circle', color: 'var(--color-text-muted)' },
+    '': { label: 'Unassigned', className: '', icon: 'inbox', color: 'var(--color-text-muted)' }
+  };
+  return map[priority || ''] || map[''];
+}
+
+function migrateStateSchema(inputState) {
+  if (!inputState) return inputState;
+  const legacyMap = { high: 'q1', med: 'q2', low: 'q4' };
+  const migrateTask = (task) => {
+    if (!task) return;
+    if (legacyMap[task.priority]) task.priority = legacyMap[task.priority];
+    if (typeof task.priority === 'undefined') task.priority = '';
+    delete task.eisenhower;
+  };
+  if (Array.isArray(inputState.categories)) {
+    inputState.categories.forEach(cat => (cat.tasks || []).forEach(migrateTask));
+  }
+  if (Array.isArray(inputState.archive)) inputState.archive.forEach(migrateTask);
+  if (Array.isArray(inputState.trash)) inputState.trash.forEach(migrateTask);
+  return inputState;
+}
+
+function allowPriorityDrop(event) { event.preventDefault(); }
+
+function handlePriorityDrop(event, quadrant) {
+  event.preventDefault();
+  try {
+    const raw = event.dataTransfer.getData('application/json');
+    if (!raw) return;
+    const data = JSON.parse(raw);
+    if (!data.taskId) return;
+    let found = null;
+    for (const cat of state.categories) {
+      const task = (cat.tasks || []).find(t => t.id === data.taskId);
+      if (task) { found = { task, cat }; break; }
+    }
+    if (!found || found.cat.id === 'projects') return;
+
+    found.task.priority = quadrant || '';
+    updateAll();
+  } catch (err) {
+    console.error('Priority drop failed', err);
+  }
+}
+
+function renderPriorityTaskCard(task, catId) {
+  const meta = getPriorityMeta(task.priority);
+  const timeHtml = task.time ? `<span class="pill" style="font-size:10px;padding:2px 6px;">${task.time}m</span>` : '';
+  const priHtml = task.priority ? `<span class="pill ${meta.className}" style="font-size:10px;padding:2px 6px;">${meta.label}</span>` : '';
+  return `
+    <div class="priority-card" draggable="true" ondragstart='event.dataTransfer.setData("application/json", JSON.stringify({ taskId: "${task.id}", catId: "${catId}" }))'>
+      <div style="font-weight:600; margin-bottom:6px; font-size:13px;">${task.title}</div>
+      <div style="font-size:12px; color:var(--color-text-muted); display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
+        <span style="font-size:10px; text-transform:uppercase; letter-spacing:0.05em;">${catId}</span>
+        ${timeHtml} ${priHtml}
+      </div>
+    </div>
+  `;
+}
+
+function renderPriorityView() {
+  const pool = document.getElementById('priority-task-pool');
+  const quadrants = {
+    q1: document.getElementById('quadrant-q1'),
+    q2: document.getElementById('quadrant-q2'),
+    q3: document.getElementById('quadrant-q3'),
+    q4: document.getElementById('quadrant-q4')
+  };
+  if (!pool || !quadrants.q1) return;
+
+  const tasks = state.categories
+    .filter(c => c.id !== 'projects')
+    .flatMap(cat => (cat.tasks || []).map(task => ({ ...task, catId: cat.id })))
+    .filter(t => !t.done);
+
+  const unassigned = tasks.filter(t => !t.priority || t.priority === '');
+
+  pool.innerHTML = unassigned.length
+    ? unassigned.map(t => renderPriorityTaskCard(t, t.catId)).join('')
+    : `<div class="priority-empty">All active tasks are placed in the matrix.</div>`;
+
+  ['q1','q2','q3','q4'].forEach(q => {
+    const items = tasks.filter(t => t.priority === q);
+    quadrants[q].innerHTML = items.length
+      ? items.map(t => renderPriorityTaskCard(t, t.catId)).join('')
+      : `<div class="priority-empty">Drag to assign</div>`;
+  });
+
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+// --- END PRIORITY VIEW HELPERS ---
+
 function switchView(viewName, fromFlowClick = false) {
       if (viewName === 'list' && fromFlowClick) window.cameFromFlow = true;
-      else if (viewName === 'flow' || !fromFlowClick) window.cameFromFlow = false;
+      else if ((viewName === 'flow' || viewName === 'priority') || !fromFlowClick) window.cameFromFlow = false;
 
       document.getElementById('btn-list').classList.toggle('active', viewName === 'list');
       document.getElementById('btn-flow').classList.toggle('active', viewName === 'flow');
+      const btnPri = document.getElementById('btn-priority');
+      if(btnPri) btnPri.classList.toggle('active', viewName === 'priority');
+
       document.getElementById('view-list').classList.toggle('active', viewName === 'list');
       document.getElementById('view-flow').classList.toggle('active', viewName === 'flow');
+      const viewPri = document.getElementById('view-priority');
+      if(viewPri) viewPri.classList.toggle('active', viewName === 'priority');
+
       if(viewName === 'flow') initFlowView();
       if(viewName === 'list') renderList();
+      if(viewName === 'priority') renderPriorityView();
     }
 
     function updateAll() { 
@@ -1437,6 +1691,9 @@ function switchView(viewName, fromFlowClick = false) {
     renderSidebar(); 
     renderList(); 
     initFlowView(); 
+    if (document.getElementById('view-priority') && document.getElementById('view-priority').classList.contains('active')) {
+        renderPriorityView();
+    }
     if (typeof saveUserData === 'function' && typeof currentUser !== 'undefined' && currentUser) {
         saveUserData();
     }
@@ -1514,7 +1771,7 @@ function loadUserData(uid) {
     db.collection('users').doc(uid).get().then((doc) => {
         if (doc.exists) {
             console.log("Loading tasks from cloud...");
-            state = doc.data().state; // Override local state with cloud state
+            state = migrateStateSchema(doc.data().state); // Override local state with cloud state
             if(typeof updateAll === 'function') updateAll();
         } else {
             console.log("New user, creating cloud save...");
@@ -1551,7 +1808,7 @@ function exportBackup() {
     const backupData = {
         exportedAt: new Date().toISOString(),
         exportedBy: (currentUser && currentUser.email) ? currentUser.email : 'unknown',
-        version: 'gtd-planner-v38',
+        version: 'gtd-planner-v45',
         state: state
     };
     const json = JSON.stringify(backupData, null, 2);
@@ -1596,7 +1853,7 @@ function importBackup(event) {
             );
 
             if (confirmed) {
-                state = restoredState;
+                state = migrateStateSchema(restoredState);
                 updateAll(); // re-renders UI and triggers saveUserData() via the intercept
 
                 if (typeof showToast === 'function') showToast('Backup restored successfully!', {});
