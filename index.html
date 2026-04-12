@@ -615,6 +615,7 @@ input,textarea,select{font:inherit;color:inherit}
 
     // GTD State with Projects and Due Dates
     let state = {
+      schemaVersion: 1,
       archive: [],
       trash: [],
       activeNav: "all",
@@ -1582,18 +1583,25 @@ function getPriorityMeta(priority) {
 
 function migrateStateSchema(inputState) {
   if (!inputState) return inputState;
-  const legacyMap = { high: 'q1', med: 'q2', low: 'q4' };
-  const migrateTask = (task) => {
-    if (!task) return;
-    if (legacyMap[task.priority]) task.priority = legacyMap[task.priority];
-    if (typeof task.priority === 'undefined') task.priority = '';
-    delete task.eisenhower;
-  };
-  if (Array.isArray(inputState.categories)) {
-    inputState.categories.forEach(cat => (cat.tasks || []).forEach(migrateTask));
+  let version = inputState.schemaVersion || 0;
+
+  if (version < 1) {
+      const legacyMap = { high: 'q1', med: 'q2', low: 'q4' };
+      const migrateTask = (task) => {
+        if (!task) return;
+        if (legacyMap[task.priority]) task.priority = legacyMap[task.priority];
+        if (typeof task.priority === 'undefined') task.priority = '';
+        delete task.eisenhower;
+      };
+      if (Array.isArray(inputState.categories)) {
+        inputState.categories.forEach(cat => (cat.tasks || []).forEach(migrateTask));
+      }
+      if (Array.isArray(inputState.archive)) inputState.archive.forEach(migrateTask);
+      if (Array.isArray(inputState.trash)) inputState.trash.forEach(migrateTask);
+
+      inputState.schemaVersion = 1;
   }
-  if (Array.isArray(inputState.archive)) inputState.archive.forEach(migrateTask);
-  if (Array.isArray(inputState.trash)) inputState.trash.forEach(migrateTask);
+
   return inputState;
 }
 
@@ -1767,11 +1775,30 @@ document.getElementById('btn-logout').addEventListener('click', () => {
 });
 
 // Load tasks from Cloud Database
+const CURRENT_SCHEMA_VERSION = 1;
+
 function loadUserData(uid) {
     db.collection('users').doc(uid).get().then((doc) => {
         if (doc.exists) {
             console.log("Loading tasks from cloud...");
-            state = migrateStateSchema(doc.data().state); // Override local state with cloud state
+            let cloudState = doc.data().state;
+            let cloudVersion = cloudState.schemaVersion || 0;
+
+            if (cloudVersion < CURRENT_SCHEMA_VERSION) {
+                console.log(`Migrating state from v${cloudVersion} to v${CURRENT_SCHEMA_VERSION}...`);
+                // Save a pre-migration snapshot to protect user data
+                db.collection('users').doc(uid).collection('snapshots').add({
+                    state: cloudState, // Raw unmigrated state
+                    savedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    reason: `pre_migration_v${CURRENT_SCHEMA_VERSION}`
+                }).then(() => {
+                    console.log("Pre-migration snapshot safely stored in Firebase.");
+                }).catch(e => console.error("Failed to save pre-migration snapshot:", e));
+
+                cloudState = migrateStateSchema(cloudState);
+            }
+
+            state = cloudState; // Override local state with fully migrated cloud state
             if(typeof updateAll === 'function') updateAll();
         } else {
             console.log("New user, creating cloud save...");
