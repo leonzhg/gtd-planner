@@ -10,7 +10,7 @@
 
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>GTD Pro Planner (v73)</title>
+<title>GTD Pro Planner (v74)</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300..700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
@@ -1599,7 +1599,7 @@ function sortTasksForDisplay(tasks, catId, sourceType = 'active') {
             html += `<h3 style="font-size:var(--text-xs); color:var(--color-text-muted); margin-top:var(--space-6); margin-bottom:var(--space-2); text-transform:uppercase; letter-spacing:0.05em;">${cat.name}</h3>`;
         }
 
-        html += `<div class="tasks-grid" id="grid-${cat.id}" data-cat="${cat.id}" ondragover="allowDrop(event)" ondrop="try { const d = JSON.parse(event.dataTransfer.getData('application/json')); moveTaskToCategory(d.catId, d.taskId, '${cat.id}'); } catch(e) { console.error(e); }">`;
+        html += `<div class="tasks-grid" id="grid-${cat.id}" data-cat="${cat.id}">`;
         if (cat.tasks.length === 0 && !isProjectView && !isArchiveView && !isTrashView) html += `<div style="color:var(--color-text-faint); font-size:var(--text-xs); padding:var(--space-2)">No tasks in this list.</div>`;
         if (cat.tasks.length === 0 && isTrashView) html += `<div style="color:var(--color-text-faint); font-size:var(--text-xs); padding:var(--space-2)">Trash is empty.</div>`;
 
@@ -1720,7 +1720,6 @@ function sortTasksForDisplay(tasks, catId, sourceType = 'active') {
                  ghostClass: 'sortable-ghost',
                  group: 'tasks',
                  onEnd: function(evt) {
-                     // If item was dropped outside and handled by HTML5, it's removed from the DOM
                      if (!document.body.contains(evt.item)) return;
                      if (window.isSidebarDrop) {
                          window.isSidebarDrop = false;
@@ -1734,13 +1733,29 @@ function sortTasksForDisplay(tasks, catId, sourceType = 'active') {
 
                      if (!fromCat || !toCat) return;
 
+                     if (fromCatId === toCatId && evt.oldIndex === evt.newIndex) return;
+
                      const item = fromCat.tasks.splice(evt.oldIndex, 1)[0];
+                     if (!item) {
+                         updateAll();
+                         return;
+                     }
+
                      toCat.tasks.splice(evt.newIndex, 0, item);
 
-                     // If moved to a different category, reset its project if it had one? 
-                     // Usually GTD allows moving without losing project, but categories change semantics.
+                     // Save safely instantly
+                     if (typeof saveLocalData === 'function') saveLocalData();
 
-                     updateAll();
+                     // Rerender silently and let cloud debouncer fire
+                     updateAll({ skipSave: true });
+
+                     // Force the cloud sync queue right now
+                     clearTimeout(window.saveTimer);
+                     window.saveTimer = setTimeout(() => {
+                         if (typeof saveUserData === 'function' && typeof currentUser !== 'undefined' && currentUser) {
+                             saveUserData();
+                         }
+                     }, 300);
                  }
              });
           });
@@ -2809,7 +2824,7 @@ function exportBackup() {
     const backupData = {
         exportedAt: new Date().toISOString(),
         exportedBy: (currentUser && currentUser.email) ? currentUser.email : 'unknown',
-        version: 'gtd-planner-v45',
+        version: 'gtd-planner-v74',
         state: state
     };
     const json = JSON.stringify(backupData, null, 2);
@@ -2968,7 +2983,7 @@ function generatePrintHTML() {
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="GTD Planner">
 
-        <title>GTD Pro Planner (v73)</title>
+        <title>GTD Pro Planner (v74)</title>
         <style>
             body { font-family: 'Inter', sans-serif; padding: 40px; max-width: 800px; margin: 0 auto; color: #333; line-height: 1.5; }
             @media print { body { padding: 0; } }
