@@ -2571,51 +2571,80 @@ function switchView(viewName, fromFlowClick = false) {
       if(viewName === 'calendar') renderCalendar();
     }
 
-    function updateAll(options = {}) {
-  updateStats();
-  renderSidebar();
-  renderList();
+    const LOCAL_STATE_KEY = 'gtd-planner-v73-state';
+let saveTimer = null;
 
-  if (document.getElementById('view-flow')?.classList.contains('active')) {
-    initFlowView();
-  }
-
-  if (document.getElementById('view-priority')?.classList.contains('active')) {
-    renderPriorityView();
-  }
-
-  if (document.getElementById('view-calendar')?.classList.contains('active') && typeof renderCalendar === 'function') {
-    renderCalendar();
-  }
-
-  if (options.skipSave) return;
-
-  clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => {
-    if (typeof saveUserData === 'function') {
-      saveUserData();
+// Synchronous local save + Debounced cloud save
+function saveLocalData() {
+    try {
+        localStorage.setItem(LOCAL_STATE_KEY, JSON.stringify({
+            state: state,
+            versionHistory: typeof versionHistoryCache !== 'undefined' && Array.isArray(versionHistoryCache) ? versionHistoryCache : [],
+            savedAt: Date.now()
+        }));
+    } catch(e) {
+        console.error("Local save failed", e);
     }
-  }, 150);
 }
 
+function loadLocalBackup() {
+    try {
+        const raw = localStorage.getItem(LOCAL_STATE_KEY);
+        if(!raw) return false;
+        const parsed = JSON.parse(raw);
+        if(!parsed || !parsed.state) return false;
+
+        state = migrateStateSchema(parsed.state);
+        if(Array.isArray(parsed.versionHistory)) {
+            versionHistoryCache = parsed.versionHistory;
+        }
+        return true;
+    } catch(e) {
+        console.error("Local load failed", e);
+        return false;
+    }
+}
+
+function updateAll(options = {}) { 
+    updateStats(); 
+    renderSidebar(); 
+    renderList(); 
+    if (document.getElementById('view-flow') && document.getElementById('view-flow').classList.contains('active')) {
+        initFlowView();
+    }
+    if (document.getElementById('view-priority') && document.getElementById('view-priority').classList.contains('active')) {
+        renderPriorityView();
+    }
+    if (document.getElementById('view-calendar') && document.getElementById('view-calendar').classList.contains('active')) {
+        if (typeof renderCalendar === 'function') renderCalendar();
+    }
+
+    if (options.skipSave) return;
+
+    // INSTANT LOCAL SAVE (Sync)
+    saveLocalData();
+
+    // DEBOUNCED CLOUD SAVE (Async)
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+        if (typeof saveUserData === 'function' && typeof currentUser !== 'undefined' && currentUser) {
+            saveUserData();
+        }
+    }, 500);
+}
+
+// Init local immediately before rendering
 document.addEventListener('DOMContentLoaded', () => {
-  loadLocalBackup();
-  updateAll({ skipSave: true });
+    loadLocalBackup();
+    updateAll({ skipSave: true });
 });
 
+// Rescue local save on close
 window.addEventListener('beforeunload', () => {
-  try {
-    localStorage.setItem(LOCAL_STATE_KEY, JSON.stringify({
-      state: state,
-      versionHistory: Array.isArray(versionHistoryCache) ? versionHistoryCache : [],
-      savedAt: Date.now()
-    }));
-  } catch (error) {
-    console.error('beforeunload local save failed:', error);
-  }
+    saveLocalData();
 });
 
-    // Run initial update silently
+    // Fallback if DOMContentLoaded already fired
     updateAll({ skipSave: true });
     window.addEventListener('resize', () => { if(document.getElementById('view-flow').classList.contains('active')) initFlowView(); });
   </script>
@@ -2708,6 +2737,29 @@ function loadUserData(uid) {
             console.log("Loading tasks from cloud...");
             const payload = doc.data() || {};
             let cloudState = payload.state || null;
+
+            // CONFLICT RESOLUTION:
+            // Check if local cache has newer changes than the cloud
+            let useLocal = false;
+            try {
+                const rawLocal = localStorage.getItem(LOCAL_STATE_KEY);
+                if(rawLocal) {
+                    const parsedLocal = JSON.parse(rawLocal);
+                    const cloudTime = payload.lastUpdated ? (typeof payload.lastUpdated.toMillis === 'function' ? payload.lastUpdated.toMillis() : new Date(payload.lastUpdated).getTime()) : 0;
+                    if(parsedLocal.savedAt && parsedLocal.savedAt > cloudTime) {
+                        console.log("Local changes are newer than cloud. Keeping local state and syncing up.");
+                        useLocal = true;
+                    }
+                }
+            } catch(e) { console.warn("Conflict resolution error", e); }
+
+            if (useLocal) {
+                // If local is newer, we don't overwrite `state` with cloud data.
+                // We just push the current state up.
+                saveUserData();
+                return;
+            }
+
             versionHistoryCache = Array.isArray(payload.versionHistory) ? payload.versionHistory : [];
             if (!cloudState) {
                 cloudState = migrateStateSchema(JSON.parse(JSON.stringify(state)));
@@ -2725,7 +2777,7 @@ function loadUserData(uid) {
                 cloudState = migrateStateSchema(cloudState);
             }
             state = cloudState;
-            if(typeof updateAll === 'function') updateAll({ skipSave: false });
+            if(typeof updateAll === 'function') updateAll({ skipSave: true }); // UI render without triggering another save instantly
         } else {
             console.log("New user, creating cloud save...");
             versionHistoryCache = [];
@@ -2737,58 +2789,20 @@ function loadUserData(uid) {
 }
 
 // Save tasks to Cloud Database
-const LOCAL_STATE_KEY = 'gtd-planner-v73-state';
-let saveTimer = null;
-
 function saveUserData() {
-  try {
-    localStorage.setItem(LOCAL_STATE_KEY, JSON.stringify({
-      state: state,
-      versionHistory: Array.isArray(versionHistoryCache) ? versionHistoryCache : [],
-      savedAt: Date.now()
-    }));
-  } catch (error) {
-    console.error('Local save failed:', error);
-  }
-
-  if (typeof currentUser === 'undefined' || !currentUser || typeof db === 'undefined' || !db) {
-    return Promise.resolve(false);
-  }
-
-  return db.collection('users').doc(currentUser.uid).set({
-    state: state,
-    versionHistory: Array.isArray(versionHistoryCache) ? versionHistoryCache : [],
-    lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
-  }, { merge: true }).then(() => {
-    return true;
-  }).catch((error) => {
-    console.error('Cloud save failed:', error);
-    return false;
-  });
-}
-
-function loadLocalBackup() {
-  try {
-    const raw = localStorage.getItem(LOCAL_STATE_KEY);
-    if (!raw) return false;
-
-    const parsed = JSON.parse(raw);
-    if (!parsed || !parsed.state) return false;
-
-    state = migrateStateSchema(parsed.state);
-    if (Array.isArray(parsed.versionHistory)) {
-      versionHistoryCache = parsed.versionHistory;
+    if (currentUser && typeof state !== 'undefined' && typeof db !== 'undefined') {
+        // We assume local save was already handled synchronously by saveLocalData()
+        db.collection('users').doc(currentUser.uid).set({
+            state: state,
+            versionHistory: Array.isArray(versionHistoryCache) ? versionHistoryCache : [],
+            lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true }).catch((error) => {
+            console.error("Error saving user data:", error);
+        });
     }
-    return true;
-  } catch (error) {
-    console.error('Local load failed:', error);
-    return false;
-  }
 }
 
-// Intercept the original updateAll function so it saves to the cloud every time you modify a task
-if (typeof updateAll === 'function') {;
-}
+
 
 // ── EXPORT: Download current in-memory state as JSON backup ─────
 function exportBackup() {
