@@ -203,6 +203,9 @@ input,textarea,select{font:inherit;color:inherit}
 }
 .node-high-priority { animation: pulse-high-svg 2s infinite; stroke: var(--color-high) !important; }
 
+
+    .hover-bg:hover { background: var(--color-surface-offset); border-color: var(--color-primary) !important; }
+
 </style>
 
 <!-- Firebase SDKs -->
@@ -329,8 +332,15 @@ input,textarea,select{font:inherit;color:inherit}
       </div>
 
       <!-- FLOW VIEW -->
-      <div class="view-container" id="view-flow">
-        <div id="flow-canvas"></div>
+      <div class="view-container" id="view-flow" style="display: flex; flex-direction: row; gap: var(--space-4); height: 100%; padding: var(--space-6) var(--space-8);">
+        <div id="flow-canvas" style="flex: 1; min-width: 0; position: relative;"></div>
+        <div id="flow-side-panel" style="display: none; width: 340px; flex-direction: column; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: var(--space-4); overflow-y: auto; height: 100%; box-shadow: var(--shadow-sm);">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--space-4); border-bottom: 1px solid var(--color-divider); padding-bottom: var(--space-2);">
+            <div id="flow-panel-title" style="font-size: var(--text-base); font-weight: 600; color: var(--color-primary); display: flex; align-items: center; gap: 8px; margin:0; flex:1; overflow:hidden;"></div>
+            <button class="action-btn" onclick="if(window.zoomToNode && window.flowRoot) window.zoomToNode(window.flowRoot)" title="Close Panel"><i data-lucide="x" style="width: 16px; height: 16px;"></i></button>
+          </div>
+          <div id="flow-panel-list" style="display: flex; flex-direction: column; gap: 8px; flex: 1;"></div>
+        </div>
       </div>
 
       <!-- PRIORITY VIEW -->
@@ -402,7 +412,7 @@ input,textarea,select{font:inherit;color:inherit}
         <div class="form-group">
           <label>Priority</label>
           <select id="task-priority-input">
-            <option value="">Unassigned</option>
+            <option value="" selected>-- Select Priority (Optional) --</option>
             <option value="q1">Q1: Urgent Red (Do First)</option>
             <option value="q2">Q2: Yellow (Schedule)</option>
             <option value="q3">Q3: Green (Delegate)</option>
@@ -488,6 +498,87 @@ input,textarea,select{font:inherit;color:inherit}
       </div>
       <div class="modal-actions" style="margin-top: 24px;">
         <button class="btn-secondary" onclick="closeModal('share-modal')">Close</button>
+      </div>
+    </div>
+  </div>
+
+  
+  <!-- CLARIFY WIZARD MODAL -->
+  <div class="modal-overlay" id="clarify-modal">
+    <div class="modal" style="width: 500px; max-height: 90vh; display: flex; flex-direction: column;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--space-4); padding-bottom: var(--space-3); border-bottom: 1px solid var(--color-divider);">
+        <h3 style="display: flex; align-items: center; gap: 8px; margin: 0; color: var(--color-primary);">
+          <i data-lucide="inbox"></i> Clarify Inbox (<span id="clarify-count">0</span> left)
+        </h3>
+        <button class="action-btn" onclick="closeClarifyWizard()" title="Close Wizard"><i data-lucide="x" style="width: 18px; height: 18px;"></i></button>
+      </div>
+
+      <div id="clarify-content" style="flex: 1; overflow-y: auto; padding-right: 4px;">
+        <div style="background: var(--color-surface-offset); padding: var(--space-4); border-radius: var(--radius-md); margin-bottom: var(--space-4); border-left: 4px solid var(--color-primary);">
+          <div style="font-size: 11px; color: var(--color-text-faint); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px;">Original Captured Thought:</div>
+          <div id="clarify-original-task" style="font-size: var(--text-lg); font-weight: 600; color: var(--color-text);">Buy tires</div>
+        </div>
+
+        <div class="form-group">
+          <label>1. What is the successful outcome? (Make it actionable)</label>
+          <input type="text" id="clarify-title-input" placeholder="e.g. Call mechanic for 4 winter tire quotes">
+        </div>
+
+        <div style="margin: var(--space-6) 0; position: relative;">
+          <div style="position: absolute; top: 50%; left: 0; right: 0; height: 1px; background: var(--color-divider); z-index: 1;"></div>
+          <div style="position: relative; z-index: 2; text-align: center;">
+            <span style="background: var(--color-surface); padding: 0 10px; font-size: 12px; color: var(--color-text-muted); font-weight: 600;">2. PROCESS & ROUTE</span>
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3);">
+
+          <!-- Do It Now -->
+          <div style="border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: var(--space-3); cursor: pointer; transition: all 0.2s;" class="hover-bg" onclick="processClarify('done')">
+            <div style="display: flex; align-items: center; gap: 8px; font-weight: 600; color: var(--color-primary); margin-bottom: 4px;">
+              <i data-lucide="check-circle-2" style="width: 16px; height: 16px;"></i> Do it now (< 2 min)
+            </div>
+            <div style="font-size: 11px; color: var(--color-text-muted);">Mark as immediately complete.</div>
+          </div>
+
+          <!-- Project -->
+          <div style="border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: var(--space-3); cursor: pointer; transition: all 0.2s;" class="hover-bg" onclick="processClarify('projects')">
+            <div style="display: flex; align-items: center; gap: 8px; font-weight: 600; color: #3e7c53; margin-bottom: 4px;">
+              <i data-lucide="folder-tree" style="width: 16px; height: 16px;"></i> Multiple Steps
+            </div>
+            <div style="font-size: 11px; color: var(--color-text-muted);">Convert into a new Project.</div>
+          </div>
+
+          <!-- Delegate -->
+          <div style="border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: var(--space-3); cursor: pointer; transition: all 0.2s;" class="hover-bg" onclick="processClarify('waiting')">
+            <div style="display: flex; align-items: center; gap: 8px; font-weight: 600; color: #b4702b; margin-bottom: 4px;">
+              <i data-lucide="user-plus" style="width: 16px; height: 16px;"></i> Delegate it
+            </div>
+            <div style="font-size: 11px; color: var(--color-text-muted);">Send to Waiting For.</div>
+          </div>
+
+          <!-- Schedule -->
+          <div style="border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: var(--space-3); cursor: pointer; transition: all 0.2s;" class="hover-bg" onclick="processClarify('scheduled')">
+            <div style="display: flex; align-items: center; gap: 8px; font-weight: 600; color: #c25975; margin-bottom: 4px;">
+              <i data-lucide="calendar" style="width: 16px; height: 16px;"></i> Defer it
+            </div>
+            <div style="font-size: 11px; color: var(--color-text-muted);">Move to Scheduled / Calendar.</div>
+          </div>
+
+        </div>
+
+        <div style="margin-top: var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: var(--space-3); cursor: pointer; transition: all 0.2s;" class="hover-bg" onclick="processClarify('next-actions')">
+          <div style="display: flex; align-items: center; gap: 8px; font-weight: 600; color: #4f98a3; margin-bottom: 4px;">
+            <i data-lucide="play-circle" style="width: 16px; height: 16px;"></i> As soon as possible
+          </div>
+          <div style="font-size: 11px; color: var(--color-text-muted);">Add to active Next Actions queue.</div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); margin-top: var(--space-3);">
+          <button class="btn-secondary" style="justify-content: center;" onclick="processClarify('someday')"><i data-lucide="coffee"></i> Someday</button>
+          <button class="btn-secondary" style="justify-content: center; color: var(--color-high);" onclick="processClarify('trash')"><i data-lucide="trash-2"></i> Trash</button>
+        </div>
+
       </div>
     </div>
   </div>
@@ -708,6 +799,54 @@ input,textarea,select{font:inherit;color:inherit}
 
 
     let undoStack = [];
+
+    
+    
+    function processTaskFlow(taskId, targetCat, makeProject = false) {
+        const inboxCat = state.categories.find(c => c.id === 'inbox');
+        if (!inboxCat) return;
+
+        const taskIdx = inboxCat.tasks.findIndex(t => t.id === taskId);
+        if (taskIdx === -1) return;
+
+        const task = inboxCat.tasks.splice(taskIdx, 1)[0];
+
+        if (makeProject) {
+            const projCat = state.categories.find(c => c.id === 'projects');
+            task.tags = ["Project"];
+            task.priority = "q2";
+            task.time = 60;
+            projCat.tasks.push(task);
+            showToast('Converted to Project!');
+        } else {
+            const target = state.categories.find(c => c.id === targetCat);
+            target.tasks.push(task);
+            showToast('Task processed!');
+        }
+
+        updateAll();
+    }
+
+    function quickAddNextAction(projectId) {
+        const input = document.getElementById('flow-quick-add-input');
+        const title = input ? input.value.trim() : '';
+        if (!title) return;
+
+        const nextCat = state.categories.find(c => c.id === 'next-actions');
+        if (!nextCat) return;
+
+        nextCat.tasks.push({
+            id: "t" + Date.now(),
+            title: title,
+            time: 30, // default quick add time
+            priority: "q2",
+            projectId: projectId,
+            done: false
+        });
+
+        showToast('Next Action added!');
+        updateAll(); // this will re-render everything
+    }
 
     function showToast(message, actionData) {
         const container = document.getElementById('toast-container');
@@ -1083,6 +1222,7 @@ input,textarea,select{font:inherit;color:inherit}
                 <h2 class="section-title">
                   <div class="category-dot" style="background:${categoryColors[cat.id]}"></div>
                   <span id="cat-name-display-${cat.id}">${cat.name}</span>
+                  ${cat.id === 'inbox' && cat.tasks.filter(t=>!t.done).length > 0 ? `<button class="btn-primary" style="margin-left: 12px; padding: 4px 10px; font-size: 11px; display:flex; align-items:center; gap:4px;" onclick="startClarifyWizard()"><i data-lucide="wand-2" style="width:12px;height:12px;"></i> Clarify Wizard</button>` : ''}
                   <input type="text" id="cat-name-input-${cat.id}" value="${cat.name}" style="display:none; font-size:var(--text-base); font-weight:600; font-family:var(--font-body); background:transparent; color:var(--color-text); border:1px solid var(--color-primary); border-radius:var(--radius-sm); padding:2px 6px; width:200px; outline:none;">
                   <button class="action-btn" id="cat-edit-btn-${cat.id}" onclick="startInlineEditCategory('${cat.id}')" style="opacity:0.5; margin-left: 4px;" title="Edit Category Name">
                     <i data-lucide="edit-2" style="width:16px;height:16px;"></i>
@@ -1253,6 +1393,7 @@ input,textarea,select{font:inherit;color:inherit}
 
       document.getElementById('task-title-input').value = '';
       document.getElementById('task-time-input').value = '30';
+      document.getElementById('task-priority-input').value = '';
       document.getElementById('task-due-input').value = '';
       document.getElementById('task-priority-input').value = 'low';
       document.getElementById('add-task-modal').classList.add('active');
@@ -1374,71 +1515,90 @@ input,textarea,select{font:inherit;color:inherit}
       const projectNodesMap = {};
 
       projsRaw.forEach(p => {
+          if (p.done) return;
           projectNodesMap[p.id] = {
-             name: p.title, taskId: p.id, catId: 'projects', value: 1, done: p.done, color: categoryColors['projects'], priority: p.priority, children: []
+             name: p.title, taskId: p.id, catId: 'projects', value: 1, done: p.done, color: categoryColors['projects'], priority: p.priority, children: [], activeCount: 0
           };
       });
 
-      const d3Data = { name: "GTD Universe", isRoot: true, children: [] };
+      let inboxActiveCount = 0;
+      const catsMap = {};
 
       state.categories.forEach(cat => {
-        if (cat.id === 'projects') return;
-        const catNode = { name: cat.name, id: cat.id, color: categoryColors[cat.id], children: [] };
-
+        let catActiveCount = 0;
         cat.tasks.forEach(t => {
-           const tNode = { name: t.title, taskId: t.id, catId: cat.id, projectId: t.projectId, value: 1, done: t.done, color: categoryColors[cat.id], priority: t.priority };
-           if (t.projectId && projectNodesMap[t.projectId]) {
-               projectNodesMap[t.projectId].children.push(tNode);
-           } else {
-               catNode.children.push(tNode);
+           if (!t.done) {
+               catActiveCount++;
+               if (t.projectId && projectNodesMap[t.projectId]) {
+                   projectNodesMap[t.projectId].activeCount++;
+                   projectNodesMap[t.projectId].value++;
+               }
            }
         });
-        d3Data.children.push(catNode);
+        catsMap[cat.id] = {
+           name: cat.name, id: cat.id, color: categoryColors[cat.id],
+           value: Math.max(1, catActiveCount), taskCount: catActiveCount,
+           isStuck: (cat.id === 'inbox' && catActiveCount > 10),
+           stuckReason: (cat.id === 'inbox' && catActiveCount > 10) ? "Inbox Overflow" : ""
+        };
+        if (cat.id === 'inbox') inboxActiveCount = catActiveCount;
       });
 
-      const projCatNode = { name: "Projects", id: "projects", color: categoryColors['projects'], children: Object.values(projectNodesMap) };
-      d3Data.children.push(projCatNode);
+      const projChildren = Object.values(projectNodesMap).map(p => {
+          const stuck = p.activeCount === 0;
+          return {
+              name: p.name, id: p.taskId, projectId: p.taskId, catId: 'projects', color: p.color, priority: p.priority,
+              value: Math.max(1, p.activeCount), taskCount: p.activeCount,
+              isStuck: stuck, stuckReason: stuck ? "No Active Next Actions" : ""
+          };
+      });
+      catsMap['projects'].children = projChildren;
+
+      // Build GTD Left-to-Right Hierarchy
+      // Root: Inbox
+      // Children: Next Actions, Projects (with sub-projects), Scheduled, Waiting, Someday
+      const d3Data = {
+          ...catsMap['inbox'],
+          name: "Inbox", // explicitly naming the root
+          children: [
+              catsMap['next-actions'],
+              catsMap['projects'],
+              catsMap['scheduled'],
+              catsMap['waiting'],
+              catsMap['someday']
+          ]
+      };
 
       const containerDiv = document.getElementById('flow-canvas');
       containerDiv.innerHTML = '';
+
+      const sidePanel = document.getElementById('flow-side-panel');
+      if (sidePanel) sidePanel.style.display = 'none';
+
       const rect = containerDiv.getBoundingClientRect();
-      const width = Math.max(600, rect.width || 800);
-      const height = Math.max(600, rect.height || 800);
+      const width = Math.max(600, rect.width);
+      const height = Math.max(500, rect.height);
 
-      const pack = data => d3.pack().size([width, height]).padding(12)(d3.hierarchy(data).sum(d => d.value || 1).sort((a, b) => b.value - a.value));
-      flowRoot = pack(d3Data);
+      // Use Tree layout instead of Pack
+      const tree = d3.tree().nodeSize([60, 220]); // vertical spacing 60, horizontal 220
+      const root = d3.hierarchy(d3Data);
+      const flowRoot = tree(root);
 
-      let uidCounter = 0;
-      flowRoot.each(d => d.uid = `fn-${uidCounter++}`);
-
-      window.flowOffsets = window.flowOffsets || {};
-      flowRoot.each(n => { n.origX = n.x; n.origY = n.y; });
-      flowRoot.each(n => {
-          const nId = n.data.id || n.data.taskId || n.data.name;
-          const off = window.flowOffsets[nId] || { dx: 0, dy: 0 };
-          n.x += off.dx;
-          n.y += off.dy;
-
-          if (n.parent) {
-              const dist = Math.hypot(n.x - n.parent.x, n.y - n.parent.y);
-              const maxDist = Math.max(0, n.parent.r - n.r);
-              if (dist > maxDist) {
-                  const angle = Math.atan2(n.y - n.parent.y, n.x - n.parent.x);
-                  n.x = n.parent.x + Math.cos(angle) * maxDist;
-                  n.y = n.parent.y + Math.sin(angle) * maxDist;
-                  window.flowOffsets[nId] = { dx: n.x - n.origX, dy: n.y - n.origY };
-              }
-          }
-      });
-
-      flowSvg = d3.select("#flow-canvas").append("svg")
-          .attr("viewBox", `-${width / 2} -${height / 2} ${width} ${height}`)
+      const flowSvg = d3.select("#flow-canvas").append("svg")
+          .attr("viewBox", [0, 0, width, height])
           .style("background", "transparent").style("width", "100%").style("height", "100%");
+
+      const defs = flowSvg.append("defs");
+      const filter = defs.append("filter").attr("id", "glow-red");
+      filter.append("feGaussianBlur").attr("stdDeviation", "4").attr("result", "coloredBlur");
+      const feMerge = filter.append("feMerge");
+      feMerge.append("feMergeNode").attr("in", "coloredBlur");
+      feMerge.append("feMergeNode").attr("in", "SourceGraphic");
 
       const gContainer = flowSvg.append("g");
 
       const zoom = d3.zoom()
-          .scaleExtent([0.1, 10])
+          .scaleExtent([0.2, 5])
           .on("zoom", (event) => {
               gContainer.attr("transform", event.transform);
           });
@@ -1446,184 +1606,221 @@ input,textarea,select{font:inherit;color:inherit}
 
       flowSvg.on("click", (event) => {
           if (event.defaultPrevented) return;
-          if (flowFocus && flowFocus.parent && flowFocus !== flowRoot) {
-              window.zoomToNode(flowFocus.parent);
-          } else {
-              window.zoomToNode(flowRoot);
-          }
+          window.zoomToNode(flowRoot);
       });
 
-      flowFocus = flowRoot;
+      let flowFocus = flowRoot;
       if (window.lastFlowFocusId) {
           flowRoot.each(n => {
-              if ((n.data.id || n.data.taskId) === window.lastFlowFocusId) {
-                  flowFocus = n;
-              }
+              if ((n.data.id || n.data.taskId) === window.lastFlowFocusId) flowFocus = n;
           });
       } else if (state.activeNav !== 'all') {
           flowRoot.each(n => {
-              if (n.data.id === state.activeNav || ('project-'+n.data.taskId) === state.activeNav) {
-                  flowFocus = n;
-              }
+              if (n.data.id === state.activeNav || ('project-'+n.data.taskId) === state.activeNav) flowFocus = n;
           });
       }
 
-      const drag = d3.drag()
-          .on("start", function(event, d) {
-              d3.select(this).style("cursor", "grabbing").raise();
-              event.sourceEvent.stopPropagation();
-          })
-          .on("drag", function(event, d) {
-              const k = d3.zoomTransform(flowSvg.node()).k;
-              const dx = event.dx / k;
-              const dy = event.dy / k;
+      // Draw Links (Paths)
+      gContainer.selectAll(".link")
+          .data(flowRoot.links())
+          .join("path")
+          .attr("class", "link")
+          .attr("fill", "none")
+          .attr("stroke", "var(--color-border)")
+          .attr("stroke-width", 2)
+          .attr("d", d3.linkHorizontal()
+              .x(d => d.y)
+              .y(d => d.x)
+          );
 
-              let cx = d.x + dx, cy = d.y + dy;
-
-              if (d.parent) {
-                  const dist = Math.hypot(cx - d.parent.x, cy - d.parent.y);
-                  const maxDist = Math.max(0, d.parent.r - d.r);
-                  if (dist > maxDist) {
-                      const angle = Math.atan2(cy - d.parent.y, cx - d.parent.x);
-                      cx = d.parent.x + Math.cos(angle) * maxDist;
-                      cy = d.parent.y + Math.sin(angle) * maxDist;
-                  }
-              }
-              const actualDx = cx - d.x;
-              const actualDy = cy - d.y;
-
-              d.each(n => { n.x += actualDx; n.y += actualDy; });
-
-              const siblings = d.parent ? d.parent.children : flowRoot.children;
-              if (siblings) {
-                  siblings.forEach(s => {
-                      if (s === d) return;
-                      let dist = Math.hypot(s.x - d.x, s.y - d.y);
-                      let minDist = s.r + d.r + 4;
-                      if (dist < minDist && dist > 0) {
-                          let overlap = minDist - dist;
-                          let angle = Math.atan2(s.y - d.y, s.x - d.x);
-                          let pushX = Math.cos(angle) * overlap;
-                          let pushY = Math.sin(angle) * overlap;
-                          s.each(sn => { sn.x += pushX; sn.y += pushY; });
-
-                          if (s.parent) {
-                              let pdx = s.x - s.parent.x;
-                              let pdy = s.y - s.parent.y;
-                              let pdist = Math.hypot(pdx, pdy);
-                              let pmax = Math.max(0, s.parent.r - s.r);
-                              if (pdist > pmax) {
-                                  let pangle = Math.atan2(pdy, pdx);
-                                  let corrX = (s.parent.x + Math.cos(pangle)*pmax) - s.x;
-                                  let corrY = (s.parent.y + Math.sin(pangle)*pmax) - s.y;
-                                  s.each(sn => { sn.x += corrX; sn.y += corrY; });
-                              }
-                          }
-                      }
-                  });
-              }
-
-              window.flowOffsets = window.flowOffsets || {};
-              flowRoot.each(n => {
-                  const nId = n.data.id || n.data.taskId || n.data.name;
-                  window.flowOffsets[nId] = { dx: n.x - n.origX, dy: n.y - n.origY };
-              });
-
-              gContainer.selectAll("circle").attr("cx", n => n.x).attr("cy", n => n.y);
-          })
-          .on("end", function(event, d) {
-              d3.select(this).style("cursor", "pointer");
-          });
-
-      const node = gContainer.selectAll("circle").data(flowRoot.descendants().slice(1)).join("circle")
+      const nodeGroup = gContainer.selectAll("g.node-group")
+          .data(flowRoot.descendants())
+          .join("g")
           .attr("class", d => {
-              let cls = d.children ? "node" : "node node--leaf";
-              if (!d.children && d.data.priority === 'q1' && !d.data.done) cls += " node-high-priority";
+              let cls = "node-group node";
+              if (d.data.isStuck) cls += " node-stuck";
               return cls;
           })
-          .attr("fill", d => {
-             if (d.data.done) return "var(--color-surface-offset)";
-             if (!d.children) {
-                 const c = d3.rgb(d.data.color);
-                 return c.brighter(0.5);
-             }
-             return d.data.color;
-          })
-          .style("display", d => (d === flowFocus || d.parent === flowFocus) ? "inline" : "none")
-          .style("fill-opacity", d => (d === flowFocus || d.parent === flowFocus) ? 1 : 0)
-          .attr("stroke", "var(--color-bg)")
-          .attr("stroke-width", d => d.children ? 3 : 1)
-          .attr("cx", d => d.x)
-          .attr("cy", d => d.y)
-          .attr("r", d => d.r)
-          .call(drag)
+          .attr("transform", d => `translate(${d.y},${d.x})`) // note: y and x are swapped for horizontal
+          .style("cursor", "pointer")
           .on("click", (event, d) => {
              if (event.defaultPrevented) return;
              event.stopPropagation();
-             document.getElementById("flow-tooltip").style.display = "none";
-
-             if (!d.children) {
-                // Clicked a child task: keep user in Flow View and zoom to its parent group
-                window.lastFlowFocusId = d.parent ? (d.parent.data.id || d.parent.data.taskId) : null;
-                if (d.parent) window.zoomToNode(d.parent);
-             } else {
-                // Clicked a parent grouping circle: toggle zoom only, do not force List View
-                if (flowFocus === d && d.parent) {
-                    window.zoomToNode(d.parent);
-                } else {
-                    window.zoomToNode(d);
-                }
-             }
-          })
-          .on("mousemove", (event, d) => {
-              const tooltip = document.getElementById("flow-tooltip");
-              tooltip.style.display = "block";
-              tooltip.style.left = (event.pageX + 15) + "px";
-              tooltip.style.top = (event.pageY + 15) + "px";
-              if (d.children) {
-                  const leaves = d.leaves();
-                  const done = leaves.filter(l => l.data.done).length;
-                  tooltip.innerHTML = `<strong>${d.data.name}</strong><br><span style="color:var(--color-text-muted)">${done} / ${leaves.length} tasks completed</span>`;
-              } else {
-                  tooltip.innerHTML = `<strong>${d.data.name}</strong>`;
-              }
-          })
-          .on("mouseout", () => {
-              document.getElementById("flow-tooltip").style.display = "none";
+             window.zoomToNode(d);
           });
 
-      node.append("title")
+      // Node circles
+      nodeGroup.append("circle")
+          .attr("r", d => d.data.id === 'inbox' ? 24 : (d.children ? 20 : 14))
+          .attr("fill", d => d.data.isStuck ? "var(--color-high)" : d.data.color)
+          .attr("stroke", "var(--color-bg)")
+          .attr("stroke-width", d => d.data.isStuck ? 4 : 2)
+          .style("filter", d => d.data.isStuck ? "url(#glow-red)" : "none");
+
+      // Node icons/text (Task Counts)
+      nodeGroup.append("text")
+          .attr("text-anchor", "middle")
+          .attr("dy", "0.3em")
+          .style("fill", "white")
+          .style("font-size", d => d.data.id === 'inbox' ? "14px" : "11px")
+          .style("font-weight", "bold")
+          .style("pointer-events", "none")
+          .text(d => d.data.taskCount || 0);
+
+      // Node Labels (Outside)
+      nodeGroup.append("text")
+          .attr("dy", d => d.data.id === 'inbox' ? "-2.2em" : "-1.8em")
+          .attr("text-anchor", "middle")
+          .style("fill", "var(--color-text)")
+          .style("font-size", "12px")
+          .style("font-weight", "500")
           .text(d => {
-              if (d.children) {
-                  const leaves = d.leaves();
-                  const done = leaves.filter(l => l.data.done).length;
-                  return `${d.data.name}\nTasks: ${done} / ${leaves.length} completed`;
-              }
-              return `${d.data.name}\nStatus: ${d.data.done ? 'Done' : 'Active'}`;
+              let name = d.data.name;
+              if (name.length > 18) name = name.substring(0, 15) + '...';
+              return name;
           });
 
-      window.zoomToNode = function(d) {
+      window.zoomToNode = function(d, highlightTaskId = null) {
           if (!flowSvg) return;
           flowFocus = d;
+          window.lastFlowFocusId = d.data.id || d.data.taskId;
 
-          gContainer.selectAll("circle")
-            .filter(function(n) { return n === flowFocus || n.parent === flowFocus || this.style.display === "inline"; })
-            .transition().duration(650)
-            .style("fill-opacity", n => (n === flowFocus || n.parent === flowFocus) ? 1 : 0)
-            .on("start", function(n) { if (n === flowFocus || n.parent === flowFocus) this.style.display = "inline"; })
-            .on("end", function(n) { if (n !== flowFocus && n.parent !== flowFocus) this.style.display = "none"; });
+          // Remove the opacity hiding since it's a tree, we want to see the whole path
+          gContainer.selectAll("g.node-group").transition().duration(650).style("opacity", 1);
+          gContainer.selectAll(".link").transition().duration(650).style("opacity", 1);
 
-          const k = width / (d.r * 2 + 40);
-          const x = -d.x * k;
-          const y = -d.y * k;
+          const k = d.data.id === 'inbox' ? 1.0 : 1.3; // slightly closer zoom for specific nodes
 
-          flowSvg.transition().duration(650).call(zoom.transform, d3.zoomIdentity.translate(x, y).scale(k));
+          // d.y is horizontal, d.x is vertical in a left-to-right tree
+          // Center the node horizontally a bit to the left so the side panel doesn't cover it
+          const targetX = -d.y * k + (width * 0.35); 
+          const targetY = -d.x * k + (height / 2);
+
+          flowSvg.transition().duration(650).call(zoom.transform, d3.zoomIdentity.translate(targetX, targetY).scale(k));
+
+          const panel = document.getElementById('flow-side-panel');
+          if (!panel) return;
+
+          if (!d) {
+              panel.style.display = 'none';
+          } else {
+              panel.style.display = 'flex';
+              let targetTasks = [];
+
+              if (d.data.id === 'projects') {
+                  targetTasks = state.categories.find(c => c.id === 'projects').tasks.filter(t => !t.done);
+              } else if (d.data.catId === 'projects' || d.data.projectId) {
+                  const pId = d.data.taskId || d.data.projectId;
+                  targetTasks = state.categories.flatMap(c => c.tasks).filter(t => t.projectId === pId && !t.done);
+              } else {
+                  const cat = state.categories.find(c => c.id === d.data.id || c.id === d.data.catId);
+                  if (cat) targetTasks = cat.tasks.filter(t => !t.done);
+              }
+
+              if (typeof sortTasksForDisplay === 'function') {
+                  targetTasks = sortTasksForDisplay(targetTasks, 'flow', 'active');
+              }
+
+              const filterTarget = (d.data.id === 'projects') ? 'projects' : (d.data.catId === 'projects' || d.data.projectId) ? 'project-'+(d.data.taskId || d.data.projectId) : (d.data.catId || d.data.id);
+
+              let titleHtml = `
+                 <div style="display:flex; align-items:center; gap:8px; overflow:hidden; flex:1;">
+                   <div class="category-dot" style="background:${d.data.isStuck ? 'var(--color-high)' : d.data.color}; flex-shrink: 0; width: 12px; height: 12px;"></div>
+                   <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${d.data.name}">${d.data.name}</span>
+                 </div>
+                 <button class="btn-secondary" style="padding: 4px 8px; font-size: 11px; border:none; background:var(--color-surface-2); color:var(--color-text); flex-shrink:0;" onclick="switchView('list', true); setNavFilter('${filterTarget}');">View List <i data-lucide="arrow-right" style="width:12px;height:12px;"></i></button>
+              `;
+
+              document.getElementById('flow-panel-title').innerHTML = titleHtml;
+
+              const listDiv = document.getElementById('flow-panel-list');
+              let html = '';
+
+              // INBOX PIPELINE PROCESSING
+              if (d.data.id === 'inbox') {
+                  html += `<div style="background: var(--color-surface-offset); border-radius: var(--radius-md); padding: var(--space-3); margin-bottom: var(--space-3);">
+                      <div style="color: var(--color-text); font-weight: 600; font-size: var(--text-sm); margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
+                          <i data-lucide="inbox" style="width: 14px; height: 14px;"></i> Process Inbox
+                      </div>
+                      <div style="color: var(--color-text-muted); font-size: 12px; margin-bottom: 12px;">Process thoughts one-by-one into actionable GTD outcomes.</div>
+                      <button class="btn-primary" style="width: 100%; justify-content: center;" onclick="startClarifyWizard()"><i data-lucide="wand-2"></i> Launch Clarify Wizard</button>
+                  </div>`;
+              }
+              // STUCK PROJECT BANNER
+              else if (d.data.isStuck) {
+                  const bannerTitle = 'Project is Stuck';
+                  const bannerMsg = 'This project has no active Next Actions. What is the physical next step to move it forward?';
+
+                  html += `
+                  <div style="background: rgba(239, 68, 68, 0.1); border: 1px solid var(--color-high); border-radius: var(--radius-md); padding: var(--space-3); margin-bottom: var(--space-3);">
+                      <div style="color: var(--color-high); font-weight: 600; font-size: var(--text-sm); margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
+                          <i data-lucide="alert-triangle" style="width: 14px; height: 14px;"></i> ${bannerTitle}
+                      </div>
+                      <div style="color: var(--color-text-muted); font-size: 12px; margin-bottom: 8px;">${bannerMsg}</div>
+                      <div style="display:flex; gap:6px;">
+                          <input type="text" id="flow-quick-add-input" placeholder="Enter next action..." style="flex:1; font-size:12px; padding: 6px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-bg); color: var(--color-text);" onkeydown="if(event.key==='Enter') quickAddNextAction('${d.data.taskId || d.data.id}')">
+                          <button class="btn-primary" style="padding: 6px 12px; font-size: 12px;" onclick="quickAddNextAction('${d.data.taskId || d.data.id}')">Add</button>
+                      </div>
+                  </div>`;
+              }
+
+              if (targetTasks.length === 0) {
+                 html += '<div style="color:var(--color-text-faint); font-size:12px; text-align:center; padding:20px;">No active tasks here.</div>';
+              } else {
+                 targetTasks.forEach(task => {
+                    const meta = typeof getPriorityMeta === 'function' ? getPriorityMeta(task.priority) : {label: task.priority, className: ''};
+                    const priHtml = task.priority ? `<span class="task-tag ${meta.className}" style="font-size:10px;">${meta.label}</span>` : '';
+                    const dueHtml = task.dueDate ? `<span class="task-tag" style="background:var(--color-high);color:white;font-size:10px;"><i data-lucide="calendar" style="width:10px;height:10px;"></i> ${task.dueDate}</span>` : '';
+
+                    html += `
+                      <div class="task-card" id="flow-task-${task.id}" style="padding: 10px 12px; border-left: 3px solid ${d.data.isStuck ? 'var(--color-high)' : d.data.color}; cursor: pointer; transition: all 0.2s;" 
+                           onclick="switchView('list', true); setNavFilter('${task.projectId ? 'project-'+task.projectId : task.catId || d.data.id}'); setTimeout(()=>document.getElementById('task-${task.id}').scrollIntoView({behavior:'smooth', block:'center'}), 50);">
+                         <div class="task-title" style="margin-bottom: 6px; font-size:13px; font-weight:600;">${task.title}</div>
+                         <div style="display:flex; gap: 4px; flex-wrap:wrap; align-items:center;">
+                            ${task.time ? `<span class="task-tag" style="font-size:10px;"><i data-lucide="clock" style="width:10px;height:10px;"></i> ${task.time}m</span>` : ''}
+                            ${priHtml} ${dueHtml}
+                         </div>`;
+
+                    // INBOX PROCESSING BUTTONS
+                    if (d.data.id === 'inbox') {
+                        html += `
+                        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:4px; margin-top: 10px;">
+                            <button class="btn-secondary" style="font-size:10px; padding:4px; justify-content:center;" onclick="event.stopPropagation(); processTaskFlow('${task.id}', 'next-actions')">Next Action</button>
+                            <button class="btn-secondary" style="font-size:10px; padding:4px; justify-content:center;" onclick="event.stopPropagation(); processTaskFlow('${task.id}', 'projects', true)">New Project</button>
+                            <button class="btn-secondary" style="font-size:10px; padding:4px; justify-content:center;" onclick="event.stopPropagation(); processTaskFlow('${task.id}', 'scheduled')">Schedule</button>
+                            <button class="btn-secondary" style="font-size:10px; padding:4px; justify-content:center;" onclick="event.stopPropagation(); processTaskFlow('${task.id}', 'waiting')">Waiting</button>
+                        </div>`;
+                    }
+
+                    html += `</div>`;
+                 });
+              }
+
+              listDiv.innerHTML = html;
+              if (typeof lucide !== 'undefined') lucide.createIcons();
+
+              if (highlightTaskId) {
+                  setTimeout(() => {
+                      const el = document.getElementById('flow-task-' + highlightTaskId);
+                      if (el) {
+                          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                          const oldBg = el.style.backgroundColor;
+                          el.style.backgroundColor = "var(--color-surface-offset)";
+                          el.style.boxShadow = `0 0 0 2px var(--color-primary)`;
+                          setTimeout(() => { el.style.backgroundColor = oldBg; el.style.boxShadow = ""; }, 1500);
+                      }
+                  }, 50);
+              }
+          }
       };
 
-      const initialK = width / (flowFocus.r * 2 + 40);
-      flowSvg.call(zoom.transform, d3.zoomIdentity.translate(-flowFocus.x * initialK, -flowFocus.y * initialK).scale(initialK));
+      // Initial View Setup
+      const initialK = 1.0;
+      flowSvg.call(zoom.transform, d3.zoomIdentity.translate(width * 0.25, height / 2).scale(initialK));
 
       flowInitialized = true;
+      window.flowRoot = flowRoot;
+      window.zoomToNode(flowFocus);
     }
 
 // --- PRIORITY VIEW HELPERS ---
@@ -1755,6 +1952,10 @@ function switchView(viewName, fromFlowClick = false) {
       if(viewPri) viewPri.classList.toggle('active', viewName === 'priority');
 
       if(viewName === 'flow') initFlowView();
+      else {
+          const panel = document.getElementById('flow-side-panel');
+          if (panel) panel.style.display = 'none';
+      }
       if(viewName === 'list') renderList();
       if(viewName === 'priority') renderPriorityView();
     }
@@ -2031,7 +2232,10 @@ function generatePrintHTML() {
         <style>
             body { font-family: 'Inter', sans-serif; padding: 40px; max-width: 800px; margin: 0 auto; color: #333; line-height: 1.5; }
             @media print { body { padding: 0; } }
-        </style>
+        
+    .hover-bg:hover { background: var(--color-surface-offset); border-color: var(--color-primary) !important; }
+
+</style>
     </head>
     <body>
         <h1>GTD Planner</h1>
@@ -2066,6 +2270,91 @@ function copyAsText() {
 }
 // --- END HISTORY & SHARE LOGIC ---
 
+
+
+// --- CLARIFY WIZARD LOGIC ---
+let clarifyQueue = [];
+let currentClarifyTask = null;
+
+function startClarifyWizard() {
+    const inboxCat = state.categories.find(c => c.id === 'inbox');
+    if (!inboxCat || inboxCat.tasks.length === 0) {
+        showToast("Inbox is empty. Great job!");
+        return;
+    }
+    clarifyQueue = [...inboxCat.tasks];
+    document.getElementById('clarify-modal').classList.add('active');
+    loadNextClarifyTask();
+}
+
+function closeClarifyWizard() {
+    document.getElementById('clarify-modal').classList.remove('active');
+    clarifyQueue = [];
+    currentClarifyTask = null;
+    updateAll();
+}
+
+function loadNextClarifyTask() {
+    if (clarifyQueue.length === 0) {
+        showToast("Inbox Zero achieved! 🎉");
+        closeClarifyWizard();
+        return;
+    }
+
+    currentClarifyTask = clarifyQueue[0];
+    document.getElementById('clarify-count').innerText = clarifyQueue.length;
+    document.getElementById('clarify-original-task').innerText = currentClarifyTask.title;
+
+    const input = document.getElementById('clarify-title-input');
+    input.value = currentClarifyTask.title;
+    input.focus();
+    input.select();
+}
+
+function processClarify(action) {
+    if (!currentClarifyTask) return;
+
+    const newTitle = document.getElementById('clarify-title-input').value.trim() || currentClarifyTask.title;
+
+    // Remove from inbox in actual state
+    const inboxCat = state.categories.find(c => c.id === 'inbox');
+    const taskIdx = inboxCat.tasks.findIndex(t => t.id === currentClarifyTask.id);
+    if (taskIdx > -1) inboxCat.tasks.splice(taskIdx, 1);
+
+    // Update task title
+    currentClarifyTask.title = newTitle;
+
+    // Route it
+    if (action === 'done') {
+        currentClarifyTask.done = true;
+        state.archive.push(currentClarifyTask);
+    } else if (action === 'trash') {
+        state.trash.push(currentClarifyTask);
+    } else if (action === 'projects') {
+        currentClarifyTask.tags = ["Project"];
+        currentClarifyTask.priority = "q2";
+        currentClarifyTask.time = 60;
+        state.categories.find(c => c.id === 'projects').tasks.push(currentClarifyTask);
+        // We could theoretically prompt for the next action here, but keeping it smooth for now
+    } else {
+        // Move to specific category
+        const target = state.categories.find(c => c.id === action);
+        if (target) {
+            if (action === 'scheduled') {
+                const tomorrow = new Date();
+                tomorrow.setDate(tomorrow.getDate() + 1);
+                currentClarifyTask.dueDate = tomorrow.toISOString().split('T')[0]; // Default to tomorrow
+            }
+            target.tasks.push(currentClarifyTask);
+        }
+    }
+
+    // Move to next in queue
+    clarifyQueue.shift();
+    updateAll(); // Keep background map & lists synced instantly
+    loadNextClarifyTask();
+}
+// --- END CLARIFY WIZARD LOGIC ---
 
 function importBackup(event) {
     const file = event.target.files[0];
