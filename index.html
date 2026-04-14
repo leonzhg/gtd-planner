@@ -10,7 +10,7 @@
 
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>GTD Pro Planner (v74)</title>
+<title>GTD Pro Planner (v75.2)</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300..700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
@@ -481,6 +481,105 @@ input,textarea,select{font:inherit;color:inherit}
     padding:8px;
   }
 }
+
+.calendar-toolbar-center{
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+  min-width:220px;
+}
+.calendar-toolbar-right{
+  display:flex;
+  align-items:center;
+  gap:var(--space-2);
+}
+.calendar-subtitle{
+  font-size:12px;
+  color:var(--color-text-muted);
+}
+.calendar-mode-toggle{
+  display:flex;
+  gap:6px;
+  padding:4px;
+  background:var(--color-surface-offset);
+  border:1px solid var(--color-border);
+  border-radius:999px;
+}
+.calendar-mode-btn{
+  min-width:72px;
+}
+.calendar-mode-btn.active{
+  background:var(--color-primary);
+  color:var(--color-text-inverse, #fff);
+  border-color:var(--color-primary);
+}
+.calendar-grid.month-view{
+  grid-template-columns:repeat(7,minmax(0,1fr));
+}
+.calendar-grid.week-view{
+  grid-template-columns:repeat(7,minmax(140px,1fr));
+  overflow-x:auto;
+  align-items:stretch;
+}
+.calendar-grid.week-view .calendar-cell{
+  min-height:260px;
+}
+.calendar-grid.week-view .calendar-pill{
+  white-space:normal;
+}
+.calendar-agenda-section-title{
+  font-size:11px;
+  font-weight:700;
+  letter-spacing:.05em;
+  text-transform:uppercase;
+  color:var(--color-text-muted);
+  margin:0 0 10px 0;
+}
+.calendar-sync-status{
+  font-size:11px;
+  color:var(--color-text-muted);
+  padding:4px 8px;
+  border:1px solid var(--color-border);
+  border-radius:999px;
+  background:var(--color-surface-2);
+}
+@media (max-width: 760px){
+  .calendar-toolbar{
+    align-items:stretch;
+  }
+  .calendar-toolbar-left,
+  .calendar-toolbar-right{
+    width:100%;
+    justify-content:space-between;
+  }
+  .calendar-toolbar-center{
+    order:-1;
+    width:100%;
+  }
+  .calendar-mode-toggle{
+    width:100%;
+    justify-content:space-between;
+  }
+  .calendar-mode-btn{
+    flex:1;
+  }
+  .calendar-grid.week-view{
+    grid-template-columns:repeat(7,minmax(120px,1fr));
+  }
+}
+
+.calendar-cell.is-drop-target{
+  border-color: var(--color-primary);
+  box-shadow: inset 0 0 0 2px var(--color-primary-highlight);
+}
+.calendar-pill[draggable="true"],
+.calendar-agenda-item[draggable="true"]{
+  cursor: grab;
+}
+.calendar-pill.dragging,
+.calendar-agenda-item.dragging{
+  opacity: 0.55;
+}
 </style>
 
 
@@ -496,9 +595,14 @@ input,textarea,select{font:inherit;color:inherit}
 <body>
 
 <!-- Authentication UI Overlay -->
-<div id="auth-overlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--color-bg); z-index: 10000; display: flex; flex-direction: column; align-items: center; justify-content: center;">
-    <h2 style="margin-bottom: 20px; font-weight: 600; color: var(--color-text);">Sign in to GTD Planner</h2>
+<div id="auth-overlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--color-bg); z-index: 10000; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px;">
+    <h2 style="margin-bottom: 12px; font-weight: 600; color: var(--color-text); text-align:center;">Sign in to GTD Planner</h2>
+    <div style="margin-bottom: 16px; color: var(--color-text-muted); font-size: 14px; text-align:center; max-width: 420px;">Use cloud sync with your account, or continue in Guest Mode to keep everything local on this device without registering.</div>
     <div id="firebaseui-auth-container"></div>
+    <div style="display:flex; gap:12px; flex-wrap:wrap; justify-content:center; margin-top:16px;">
+      <button class="btn-secondary" id="btn-guest-login" onclick="continueAsGuest()"><i data-lucide="user"></i> Continue as Guest</button>
+      <button class="btn-secondary" id="btn-exit-guest" style="display:none;" onclick="exitGuestMode()"><i data-lucide="log-in"></i> Sign in instead</button>
+    </div>
 </div>
 
   <div id="mobile-overlay" onclick="toggleSidebar()"></div>
@@ -535,6 +639,7 @@ input,textarea,select{font:inherit;color:inherit}
           <i data-lucide="upload"></i> <span class="nav-label">Import
         </span></button>
         <input type="file" id="import-file-input" accept=".json" style="display:none" onchange="importBackup(event)">
+        <div class="calendar-sync-status" id="sync-status">Synced</div>
         <div class="view-toggle">
           <button class="view-btn active" id="btn-list" ondblclick="startClarifyWizard(d.data.catId || d.data.id || currentProjId || 'projects', '${task.id}')" onclick="switchView('list')">
             <i data-lucide="list"></i> <span class="nav-label">List View
@@ -677,15 +782,24 @@ input,textarea,select{font:inherit;color:inherit}
       <div class="view-container" id="view-calendar">
         <div class="calendar-toolbar">
           <div class="calendar-toolbar-left">
-            <button class="btn-secondary" onclick="changeCalendarMonth(-1)">
+            <button class="btn-secondary" onclick="changeCalendarPeriod(-1)">
               <i data-lucide="chevron-left"></i>
             </button>
             <button class="btn-secondary" onclick="goToToday()">Today</button>
-            <button class="btn-secondary" onclick="changeCalendarMonth(1)">
+            <button class="btn-secondary" onclick="changeCalendarPeriod(1)">
               <i data-lucide="chevron-right"></i>
             </button>
           </div>
-          <div class="calendar-month-title" id="calendar-month-title"></div>
+          <div class="calendar-toolbar-center">
+            <div class="calendar-month-title" id="calendar-month-title"></div>
+            <div class="calendar-subtitle" id="calendar-subtitle"></div>
+          </div>
+          <div class="calendar-toolbar-right">
+            <div class="calendar-mode-toggle">
+              <button class="btn-secondary calendar-mode-btn active" id="btn-calendar-month" onclick="setCalendarMode('month')">Month</button>
+              <button class="btn-secondary calendar-mode-btn" id="btn-calendar-week" onclick="setCalendarMode('week')">Week</button>
+            </div>
+          </div>
         </div>
 
         <div class="calendar-layout">
@@ -2377,6 +2491,7 @@ function autoPrioritizePool() {
 
 // --- CALENDAR VIEW HELPERS ---
 let calendarState = {
+  mode: 'month',
   currentMonth: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
   selectedDate: localDateKey(new Date())
 };
@@ -2419,14 +2534,34 @@ function formatLongDate(key){
   });
 }
 
+function startOfWeek(date){
+  const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  d.setDate(d.getDate() - d.getDay());
+  d.setHours(0,0,0,0);
+  return d;
+}
+
+function endOfWeek(date){
+  const d = startOfWeek(date);
+  d.setDate(d.getDate() + 6);
+  return d;
+}
+
+function formatWeekTitle(date){
+  const start = startOfWeek(date);
+  const end = endOfWeek(date);
+  const sameMonth = start.getMonth() === end.getMonth();
+  const sameYear = start.getFullYear() === end.getFullYear();
+  if (sameMonth && sameYear) {
+    return `${start.toLocaleDateString(undefined,{month:'long'})} ${start.getDate()}–${end.getDate()}, ${end.getFullYear()}`;
+  }
+  return `${start.toLocaleDateString(undefined,{month:'short', day:'numeric'})} – ${end.toLocaleDateString(undefined,{month:'short', day:'numeric', year:'numeric'})}`;
+}
+
 function getCalendarTasks(){
   return state.categories
     .filter(c => c.id !== 'projects')
-    .flatMap(c => c.tasks.map(t => ({
-      ...t,
-      catId: c.id,
-      catName: c.name
-    })));
+    .flatMap(c => c.tasks.map(t => ({ ...t, catId: c.id, catName: c.name })));
 }
 
 function getTasksForDate(dateKey){
@@ -2444,12 +2579,24 @@ function getUndatedScheduledTasks(){
   return (scheduled?.tasks || []).filter(t => !t.dueDate);
 }
 
-function changeCalendarMonth(delta){
-  calendarState.currentMonth = new Date(
-    calendarState.currentMonth.getFullYear(),
-    calendarState.currentMonth.getMonth() + delta,
-    1
-  );
+function setCalendarMode(mode){
+  calendarState.mode = mode === 'week' ? 'week' : 'month';
+  renderCalendar();
+}
+
+function changeCalendarPeriod(delta){
+  if (calendarState.mode === 'week') {
+    const base = parseDateKey(calendarState.selectedDate) || new Date();
+    base.setDate(base.getDate() + (delta * 7));
+    calendarState.selectedDate = localDateKey(base);
+    calendarState.currentMonth = new Date(base.getFullYear(), base.getMonth(), 1);
+  } else {
+    calendarState.currentMonth = new Date(
+      calendarState.currentMonth.getFullYear(),
+      calendarState.currentMonth.getMonth() + delta,
+      1
+    );
+  }
   renderCalendar();
 }
 
@@ -2465,23 +2612,12 @@ function selectCalendarDate(dateKey){
   renderCalendar();
 }
 
-function renderCalendar(){
-  const month = calendarState.currentMonth;
-  const year = month.getFullYear();
-  const monthIndex = month.getMonth();
-  const firstDay = new Date(year, monthIndex, 1);
-  const lastDay = new Date(year, monthIndex + 1, 0);
-  const leadingBlanks = firstDay.getDay();
-  const totalCells = Math.ceil((leadingBlanks + lastDay.getDate()) / 7) * 7;
-
+function buildTasksByDate(){
   const tasksByDate = {};
-  getCalendarTasks()
-    .filter(t => !!t.dueDate)
-    .forEach(t => {
-      if(!tasksByDate[t.dueDate]) tasksByDate[t.dueDate] = [];
-      tasksByDate[t.dueDate].push(t);
-    });
-
+  getCalendarTasks().filter(t => !!t.dueDate).forEach(t => {
+    if(!tasksByDate[t.dueDate]) tasksByDate[t.dueDate] = [];
+    tasksByDate[t.dueDate].push(t);
+  });
   Object.values(tasksByDate).forEach(arr => {
     arr.sort((a,b) =>
       priorityWeight(a.priority) - priorityWeight(b.priority) ||
@@ -2489,43 +2625,169 @@ function renderCalendar(){
       (a.title || '').localeCompare(b.title || '')
     );
   });
+  return tasksByDate;
+}
 
-  document.getElementById('calendar-month-title').textContent = formatMonthTitle(month);
+function handleCalendarTaskDragStart(event, taskId){
+  const task = getCalendarTasks().find(t => t.id === taskId);
+  if (!task) return;
+  event.dataTransfer.effectAllowed = 'move';
+  event.dataTransfer.setData('application/json', JSON.stringify({
+    source: 'calendar',
+    taskId: task.id,
+    catId: task.catId || '',
+    dueDate: task.dueDate || ''
+  }));
+  if (event.target && event.target.classList) event.target.classList.add('dragging');
+}
+
+function handleCalendarTaskDragEnd(event){
+  if (event.target && event.target.classList) event.target.classList.remove('dragging');
+  document.querySelectorAll('.calendar-cell.is-drop-target').forEach(el => el.classList.remove('is-drop-target'));
+}
+
+function allowCalendarDrop(event){
+  event.preventDefault();
+  event.dataTransfer.dropEffect = 'move';
+  const cell = event.currentTarget?.closest('.calendar-cell') || event.currentTarget;
+  if (cell && cell.classList) cell.classList.add('is-drop-target');
+}
+
+function leaveCalendarDrop(event){
+  const cell = event.currentTarget?.closest('.calendar-cell') || event.currentTarget;
+  if (cell && cell.classList) cell.classList.remove('is-drop-target');
+}
+
+function findTaskLocation(taskId){
+  for (const cat of state.categories) {
+    const index = (cat.tasks || []).findIndex(t => t.id === taskId);
+    if (index !== -1) return { cat, index, task: cat.tasks[index] };
+  }
+  return null;
+}
+
+function queueCloudSync(){
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    if (typeof saveUserData === 'function' && typeof currentUser !== 'undefined' && currentUser && !guestMode) {
+      saveUserData();
+    } else {
+      setSyncStatus('offline');
+    }
+  }, 250);
+}
+
+function moveTaskToCalendarDate(taskId, targetDateKey){
+  if (!taskId || !targetDateKey) return;
+  const found = findTaskLocation(taskId);
+  if (!found || !found.task) return;
+
+  found.task.dueDate = targetDateKey;
+  calendarState.selectedDate = targetDateKey;
+  const d = parseDateKey(targetDateKey);
+  if (d) calendarState.currentMonth = new Date(d.getFullYear(), d.getMonth(), 1);
+
+  setSyncStatus('saving');
+  saveLocalData();
+  updateAll({ skipSave: true });
+  queueCloudSync();
+}
+
+function handleCalendarDrop(event, targetDateKey){
+  event.preventDefault();
+  leaveCalendarDrop(event);
+  try {
+    const raw = event.dataTransfer.getData('application/json');
+    if (!raw) return;
+    const data = JSON.parse(raw);
+    if (!data.taskId) return;
+    moveTaskToCalendarDate(data.taskId, targetDateKey);
+  } catch (error) {
+    console.error('Calendar drop failed:', error);
+  }
+}
+
+function renderCalendar(){
+  const month = calendarState.currentMonth;
+  const year = month.getFullYear();
+  const monthIndex = month.getMonth();
+  const tasksByDate = buildTasksByDate();
+  const grid = document.getElementById('calendar-grid');
+  const titleEl = document.getElementById('calendar-month-title');
+  const subtitleEl = document.getElementById('calendar-subtitle');
+  const btnMonth = document.getElementById('btn-calendar-month');
+  const btnWeek = document.getElementById('btn-calendar-week');
+  if (btnMonth) btnMonth.classList.toggle('active', calendarState.mode === 'month');
+  if (btnWeek) btnWeek.classList.toggle('active', calendarState.mode === 'week');
 
   let html = '';
-  for(let i = 0; i < totalCells; i++){
-    const dayNum = i - leadingBlanks + 1;
-    if(dayNum < 1 || dayNum > lastDay.getDate()){
-      html += `<div class="calendar-cell is-empty"></div>`;
-      continue;
+
+  if (calendarState.mode === 'week') {
+    const base = parseDateKey(calendarState.selectedDate) || new Date();
+    const weekStart = startOfWeek(base);
+    titleEl.textContent = formatWeekTitle(base);
+    subtitleEl.textContent = 'Scaled weekly view with drag-and-drop day scheduling';
+    grid.className = 'calendar-grid week-view';
+
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(weekStart);
+      d.setDate(weekStart.getDate() + i);
+      const dateKey = localDateKey(d);
+      const isToday = dateKey === localDateKey(new Date());
+      const isSelected = dateKey === calendarState.selectedDate;
+      const dayTasks = tasksByDate[dateKey] || [];
+      html += `
+        <div class="calendar-cell ${isToday ? 'is-today' : ''} ${isSelected ? 'is-selected' : ''}" onclick="selectCalendarDate('${dateKey}')" ondragover="allowCalendarDrop(event)" ondragleave="leaveCalendarDrop(event)" ondrop="handleCalendarDrop(event, '${dateKey}')">
+          <div class="calendar-cell-top">
+            <span class="calendar-day-number">${d.toLocaleDateString(undefined, { weekday:'short', day:'numeric' })}</span>
+            <span class="calendar-day-count">${dayTasks.length ? `${dayTasks.length} task${dayTasks.length > 1 ? 's' : ''}` : ''}</span>
+          </div>
+          <div class="calendar-cell-tasks">
+            ${dayTasks.length ? dayTasks.map(t => `
+              <div class="calendar-pill ${t.priority || ''}" draggable="true" ondragstart="handleCalendarTaskDragStart(event, '${t.id}')" ondragend="handleCalendarTaskDragEnd(event)" onclick="event.stopPropagation()" title="${escapeHtml(t.title)}">${escapeHtml(t.title)}</div>
+            `).join('') : `<div class="calendar-more">Drop tasks here</div>`}
+          </div>
+        </div>
+      `;
     }
+  } else {
+    const firstDay = new Date(year, monthIndex, 1);
+    const lastDay = new Date(year, monthIndex + 1, 0);
+    const leadingBlanks = firstDay.getDay();
+    const totalCells = Math.ceil((leadingBlanks + lastDay.getDate()) / 7) * 7;
+    titleEl.textContent = formatMonthTitle(month);
+    subtitleEl.textContent = 'Scaled monthly overview with drag-and-drop rescheduling';
+    grid.className = 'calendar-grid month-view';
 
-    const d = new Date(year, monthIndex, dayNum);
-    const dateKey = localDateKey(d);
-    const isToday = dateKey === localDateKey(new Date());
-    const isSelected = dateKey === calendarState.selectedDate;
-    const dayTasks = tasksByDate[dateKey] || [];
-
-    html += `
-      <div class="calendar-cell ${isToday ? 'is-today' : ''} ${isSelected ? 'is-selected' : ''}"
-              onclick="selectCalendarDate('${dateKey}')">
-        <div class="calendar-cell-top">
-          <span class="calendar-day-number">${dayNum}</span>
-          <span class="calendar-day-count">${dayTasks.length ? `${dayTasks.length} task${dayTasks.length > 1 ? 's' : ''}` : ''}</span>
+    for(let i = 0; i < totalCells; i++){
+      const dayNum = i - leadingBlanks + 1;
+      if(dayNum < 1 || dayNum > lastDay.getDate()){
+        html += `<div class="calendar-cell is-empty"></div>`;
+        continue;
+      }
+      const d = new Date(year, monthIndex, dayNum);
+      const dateKey = localDateKey(d);
+      const isToday = dateKey === localDateKey(new Date());
+      const isSelected = dateKey === calendarState.selectedDate;
+      const dayTasks = tasksByDate[dateKey] || [];
+      html += `
+        <div class="calendar-cell ${isToday ? 'is-today' : ''} ${isSelected ? 'is-selected' : ''}" onclick="selectCalendarDate('${dateKey}')" ondragover="allowCalendarDrop(event)" ondragleave="leaveCalendarDrop(event)" ondrop="handleCalendarDrop(event, '${dateKey}')">
+          <div class="calendar-cell-top">
+            <span class="calendar-day-number">${dayNum}</span>
+            <span class="calendar-day-count">${dayTasks.length ? `${dayTasks.length} task${dayTasks.length > 1 ? 's' : ''}` : ''}</span>
+          </div>
+          <div class="calendar-cell-tasks">
+            ${dayTasks.slice(0,3).map(t => `
+              <div class="calendar-pill ${t.priority || ''}" draggable="true" ondragstart="handleCalendarTaskDragStart(event, '${t.id}')" ondragend="handleCalendarTaskDragEnd(event)" onclick="event.stopPropagation()" title="${escapeHtml(t.title)}">${escapeHtml(t.title)}</div>
+            `).join('')}
+            ${dayTasks.length > 3 ? `<div class="calendar-more">+${dayTasks.length - 3} more</div>` : (dayTasks.length ? '' : `<div class="calendar-more">Drop tasks here</div>`)}
+          </div>
         </div>
-        <div class="calendar-cell-tasks">
-          ${dayTasks.slice(0,3).map(t => `
-            <div class="calendar-pill ${t.priority || ''}" title="${escapeHtml(t.title)}">
-              ${escapeHtml(t.title)}
-            </div>
-          `).join('')}
-          ${dayTasks.length > 3 ? `<div class="calendar-more">+${dayTasks.length - 3} more</div>` : ''}
-        </div>
-      </div>
-    `;
+      `;
+    }
   }
 
-  document.getElementById('calendar-grid').innerHTML = html;
+  grid.innerHTML = html;
 
   const selectedKey = calendarState.selectedDate;
   document.getElementById('calendar-selected-date-label').textContent = formatLongDate(selectedKey);
@@ -2533,12 +2795,10 @@ function renderCalendar(){
   const selectedTasks = getTasksForDate(selectedKey);
   document.getElementById('calendar-day-list').innerHTML =
     selectedTasks.length
-      ? selectedTasks.map(t => `
-          <div class="calendar-agenda-item">
+      ? `<div class="calendar-agenda-section-title">Selected Day</div>` + selectedTasks.map(t => `
+          <div class="calendar-agenda-item" draggable="true" ondragstart="handleCalendarTaskDragStart(event, '${t.id}')" ondragend="handleCalendarTaskDragEnd(event)">
             <div class="calendar-agenda-title">${escapeHtml(t.title)}</div>
-            <div class="calendar-agenda-meta">
-              ${escapeHtml(t.catName)} · ${t.time || 0} min${t.priority ? ` · ${String(t.priority).toUpperCase()}` : ''}
-            </div>
+            <div class="calendar-agenda-meta">${escapeHtml(t.catName)} · ${t.time || 0} min${t.priority ? ` · ${String(t.priority).toUpperCase()}` : ''}</div>
           </div>
         `).join('')
       : `<div class="empty-state" style="font-size:12px; color:var(--color-text-muted);">No tasks scheduled for this day.</div>`;
@@ -2547,11 +2807,9 @@ function renderCalendar(){
   document.getElementById('calendar-undated-list').innerHTML =
     undated.length
       ? undated.map(t => `
-          <div class="calendar-agenda-item">
+          <div class="calendar-agenda-item" draggable="true" ondragstart="handleCalendarTaskDragStart(event, '${t.id}')" ondragend="handleCalendarTaskDragEnd(event)">
             <div class="calendar-agenda-title">${escapeHtml(t.title)}</div>
-            <div class="calendar-agenda-meta">
-              ${t.time || 0} min${t.priority ? ` · ${String(t.priority).toUpperCase()}` : ''}
-            </div>
+            <div class="calendar-agenda-meta">${t.time || 0} min${t.priority ? ` · ${String(t.priority).toUpperCase()}` : ''}</div>
           </div>
         `).join('')
       : `<div class="empty-state" style="font-size:12px; color:var(--color-text-muted);">No undated scheduled tasks.</div>`;
@@ -2586,8 +2844,82 @@ function switchView(viewName, fromFlowClick = false) {
       if(viewName === 'calendar') renderCalendar();
     }
 
-    const LOCAL_STATE_KEY = 'gtd-planner-v73-state';
+    const LOCAL_STATE_KEY = 'gtd-planner-v75-state';
+const LOCAL_MODE_KEY = 'gtd-planner-v75-mode';
 let saveTimer = null;
+let unsubscribeUserDoc = null;
+let lastLocalSaveAt = 0;
+let syncStatus = "synced";
+let guestMode = false;
+
+function isGuestMode(){
+  try { return localStorage.getItem(LOCAL_MODE_KEY) === 'guest'; } catch(e) { return false; }
+}
+
+function setGuestMode(enabled){
+  guestMode = !!enabled;
+  try {
+    if (guestMode) localStorage.setItem(LOCAL_MODE_KEY, 'guest');
+    else localStorage.removeItem(LOCAL_MODE_KEY);
+  } catch(e) { console.error('Guest mode persistence failed', e); }
+}
+
+function updateSessionUi(){
+  const overlay = document.getElementById('auth-overlay');
+  const logoutBtn = document.getElementById('btn-logout');
+  const guestBtn = document.getElementById('btn-guest-login');
+  const exitGuestBtn = document.getElementById('btn-exit-guest');
+  if (!overlay || !logoutBtn) return;
+
+  if (currentUser) {
+    overlay.style.display = 'none';
+    logoutBtn.style.display = 'flex';
+    logoutBtn.innerHTML = '<i data-lucide="log-out"></i> <span class="nav-label">Logout</span>';
+    if (guestBtn) guestBtn.style.display = 'inline-flex';
+    if (exitGuestBtn) exitGuestBtn.style.display = 'none';
+  } else if (guestMode) {
+    overlay.style.display = 'none';
+    logoutBtn.style.display = 'flex';
+    logoutBtn.innerHTML = '<i data-lucide="user"></i> <span class="nav-label">Guest Mode</span>';
+    if (guestBtn) guestBtn.style.display = 'inline-flex';
+    if (exitGuestBtn) exitGuestBtn.style.display = 'none';
+  } else {
+    overlay.style.display = 'flex';
+    logoutBtn.style.display = 'none';
+    if (guestBtn) guestBtn.style.display = 'inline-flex';
+    if (exitGuestBtn) exitGuestBtn.style.display = 'none';
+  }
+
+  if (window.lucide && typeof lucide.createIcons === 'function') lucide.createIcons();
+}
+
+function continueAsGuest(){
+  if (typeof unsubscribeUserDoc === 'function') {
+    unsubscribeUserDoc();
+    unsubscribeUserDoc = null;
+  }
+  currentUser = null;
+  setGuestMode(true);
+  loadLocalBackup();
+  updateSessionUi();
+  setSyncStatus('offline');
+  updateAll({ skipSave: true });
+}
+
+function exitGuestMode(){
+  setGuestMode(false);
+  updateSessionUi();
+  if (typeof ui !== 'undefined' && ui && typeof ui.start === 'function') {
+    ui.start('#firebaseui-auth-container', uiConfig);
+  }
+}
+
+function setSyncStatus(status){
+  syncStatus = status;
+  const el = document.getElementById("sync-status");
+  if(!el) return;
+  el.textContent = ({saving:"Saving...", synced:"Synced", offline:"Offline saved", syncing:"Syncing...", error:"Sync error"}[status] || status);
+}
 
 // Synchronous local save + Debounced cloud save
 function saveLocalData() {
@@ -2595,7 +2927,7 @@ function saveLocalData() {
         localStorage.setItem(LOCAL_STATE_KEY, JSON.stringify({
             state: state,
             versionHistory: typeof versionHistoryCache !== 'undefined' && Array.isArray(versionHistoryCache) ? versionHistoryCache : [],
-            savedAt: Date.now()
+            savedAt: (lastLocalSaveAt = Date.now())
         }));
     } catch(e) {
         console.error("Local save failed", e);
@@ -2637,6 +2969,7 @@ function updateAll(options = {}) {
     if (options.skipSave) return;
 
     // INSTANT LOCAL SAVE (Sync)
+    setSyncStatus('saving');
     saveLocalData();
 
     // DEBOUNCED CLOUD SAVE (Async)
@@ -2644,14 +2977,19 @@ function updateAll(options = {}) {
     saveTimer = setTimeout(() => {
         if (typeof saveUserData === 'function' && typeof currentUser !== 'undefined' && currentUser) {
             saveUserData();
+        } else {
+            setSyncStatus('offline');
         }
-    }, 500);
+    }, 250);
 }
 
 // Init local immediately before rendering
 document.addEventListener('DOMContentLoaded', () => {
     loadLocalBackup();
+    guestMode = isGuestMode();
     updateAll({ skipSave: true });
+    updateSessionUi();
+    if (guestMode) setSyncStatus('offline');
 });
 
 // Rescue local save on close
@@ -2718,26 +3056,29 @@ const uiConfig = {
 
 // Listen for Login/Logout
 auth.onAuthStateChanged((user) => {
-    const overlay = document.getElementById('auth-overlay');
-    const logoutBtn = document.getElementById('btn-logout');
-
     if (user) {
-        // User logged in
         currentUser = user;
-        overlay.style.display = 'none';
-        logoutBtn.style.display = 'flex';
+        setGuestMode(false);
+        updateSessionUi();
         loadUserData(user.uid);
     } else {
-        // User logged out
         currentUser = null;
-        overlay.style.display = 'flex';
-        logoutBtn.style.display = 'none';
-        ui.start('#firebaseui-auth-container', uiConfig);
+        guestMode = isGuestMode();
+        if (guestMode) {
+            continueAsGuest();
+        } else {
+            updateSessionUi();
+            ui.start('#firebaseui-auth-container', uiConfig);
+        }
     }
 });
 
 // Logout Button Logic
 document.getElementById('btn-logout').addEventListener('click', () => {
+    if (guestMode && !currentUser) {
+        exitGuestMode();
+        return;
+    }
     auth.signOut();
 });
 
@@ -2747,74 +3088,74 @@ let versionHistoryCache = [];
 const MAX_HISTORY_VERSIONS = 25;
 
 function loadUserData(uid) {
-    db.collection('users').doc(uid).get().then((doc) => {
-        if (doc.exists) {
-            console.log("Loading tasks from cloud...");
-            const payload = doc.data() || {};
-            let cloudState = payload.state || null;
+    if (unsubscribeUserDoc) unsubscribeUserDoc();
 
-            // CONFLICT RESOLUTION:
-            // Check if local cache has newer changes than the cloud
-            let useLocal = false;
-            try {
-                const rawLocal = localStorage.getItem(LOCAL_STATE_KEY);
-                if(rawLocal) {
-                    const parsedLocal = JSON.parse(rawLocal);
-                    const cloudTime = payload.lastUpdated ? (typeof payload.lastUpdated.toMillis === 'function' ? payload.lastUpdated.toMillis() : new Date(payload.lastUpdated).getTime()) : 0;
-                    if(parsedLocal.savedAt && parsedLocal.savedAt > cloudTime) {
-                        console.log("Local changes are newer than cloud. Keeping local state and syncing up.");
-                        useLocal = true;
-                    }
-                }
-            } catch(e) { console.warn("Conflict resolution error", e); }
-
-            if (useLocal) {
-                // If local is newer, we don't overwrite `state` with cloud data.
-                // We just push the current state up.
-                saveUserData();
-                return;
-            }
-
-            versionHistoryCache = Array.isArray(payload.versionHistory) ? payload.versionHistory : [];
-            if (!cloudState) {
-                cloudState = migrateStateSchema(JSON.parse(JSON.stringify(state)));
-            }
-            const cloudVersion = cloudState.schemaVersion || 0;
-            if (cloudVersion < CURRENT_SCHEMA_VERSION) {
-                versionHistoryCache = [{
-                    state: JSON.parse(JSON.stringify(cloudState)),
-                    savedAtIso: new Date().toISOString(),
-                    reason: `pre_migration_v${CURRENT_SCHEMA_VERSION}`,
-                    schemaVersion: cloudVersion
-                }, ...versionHistoryCache].slice(0, MAX_HISTORY_VERSIONS);
-                cloudState = migrateStateSchema(cloudState);
-            } else {
-                cloudState = migrateStateSchema(cloudState);
-            }
-            state = cloudState;
-            if(typeof updateAll === 'function') updateAll({ skipSave: true }); // UI render without triggering another save instantly
-        } else {
+    unsubscribeUserDoc = db.collection('users').doc(uid).onSnapshot((doc) => {
+        if (guestMode) return;
+        if (!doc.exists) {
             console.log("New user, creating cloud save...");
             versionHistoryCache = [];
             saveUserData();
+            return;
         }
-    }).catch((error) => {
+
+        console.log("Realtime sync received from cloud...");
+        const payload = doc.data() || {};
+        let cloudState = payload.state || null;
+        const cloudHistory = Array.isArray(payload.versionHistory) ? payload.versionHistory : [];
+        const cloudTime = payload.lastUpdated ? (typeof payload.lastUpdated.toMillis === 'function' ? payload.lastUpdated.toMillis() : new Date(payload.lastUpdated).getTime()) : 0;
+
+        if (lastLocalSaveAt && lastLocalSaveAt > cloudTime) {
+            return;
+        }
+
+        if (!cloudState) return;
+
+        const cloudVersion = cloudState.schemaVersion || 0;
+        if (cloudVersion < CURRENT_SCHEMA_VERSION) {
+            versionHistoryCache = [{
+                state: JSON.parse(JSON.stringify(cloudState)),
+                savedAtIso: new Date().toISOString(),
+                reason: `pre_migration_v${CURRENT_SCHEMA_VERSION}`,
+                schemaVersion: cloudVersion
+            }, ...cloudHistory].slice(0, MAX_HISTORY_VERSIONS);
+            cloudState = migrateStateSchema(cloudState);
+        } else {
+            versionHistoryCache = cloudHistory;
+            cloudState = migrateStateSchema(cloudState);
+        }
+
+        state = cloudState;
+        setSyncStatus('synced');
+        if(typeof updateAll === 'function') updateAll({ skipSave: true });
+    }, (error) => {
         console.error("Error loading user data:", error);
+        setSyncStatus('error');
     });
 }
 
 // Save tasks to Cloud Database
+
 function saveUserData() {
+    if (guestMode) {
+        setSyncStatus('offline');
+        return Promise.resolve();
+    }
     if (currentUser && typeof state !== 'undefined' && typeof db !== 'undefined') {
-        // We assume local save was already handled synchronously by saveLocalData()
-        db.collection('users').doc(currentUser.uid).set({
+        setSyncStatus('syncing');
+        return db.collection('users').doc(currentUser.uid).set({
             state: state,
             versionHistory: Array.isArray(versionHistoryCache) ? versionHistoryCache : [],
             lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
-        }, { merge: true }).catch((error) => {
+        }, { merge: true }).then(() => {
+            setSyncStatus('synced');
+        }).catch((error) => {
             console.error("Error saving user data:", error);
+            setSyncStatus('error');
         });
     }
+    setSyncStatus('offline');
+    return Promise.resolve();
 }
 
 
@@ -2824,7 +3165,7 @@ function exportBackup() {
     const backupData = {
         exportedAt: new Date().toISOString(),
         exportedBy: (currentUser && currentUser.email) ? currentUser.email : 'unknown',
-        version: 'gtd-planner-v74',
+        version: 'gtd-planner-v75.2',
         state: state
     };
     const json = JSON.stringify(backupData, null, 2);
@@ -2983,7 +3324,7 @@ function generatePrintHTML() {
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="GTD Planner">
 
-        <title>GTD Pro Planner (v74)</title>
+        <title>GTD Pro Planner (v75.2)</title>
         <style>
             body { font-family: 'Inter', sans-serif; padding: 40px; max-width: 800px; margin: 0 auto; color: #333; line-height: 1.5; }
             @media print { body { padding: 0; } }
@@ -3256,6 +3597,92 @@ function generatePrintHTML() {
   .calendar-cell{
     min-height:92px;
     padding:8px;
+  }
+}
+
+.calendar-toolbar-center{
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+  min-width:220px;
+}
+.calendar-toolbar-right{
+  display:flex;
+  align-items:center;
+  gap:var(--space-2);
+}
+.calendar-subtitle{
+  font-size:12px;
+  color:var(--color-text-muted);
+}
+.calendar-mode-toggle{
+  display:flex;
+  gap:6px;
+  padding:4px;
+  background:var(--color-surface-offset);
+  border:1px solid var(--color-border);
+  border-radius:999px;
+}
+.calendar-mode-btn{
+  min-width:72px;
+}
+.calendar-mode-btn.active{
+  background:var(--color-primary);
+  color:var(--color-text-inverse, #fff);
+  border-color:var(--color-primary);
+}
+.calendar-grid.month-view{
+  grid-template-columns:repeat(7,minmax(0,1fr));
+}
+.calendar-grid.week-view{
+  grid-template-columns:repeat(7,minmax(140px,1fr));
+  overflow-x:auto;
+  align-items:stretch;
+}
+.calendar-grid.week-view .calendar-cell{
+  min-height:260px;
+}
+.calendar-grid.week-view .calendar-pill{
+  white-space:normal;
+}
+.calendar-agenda-section-title{
+  font-size:11px;
+  font-weight:700;
+  letter-spacing:.05em;
+  text-transform:uppercase;
+  color:var(--color-text-muted);
+  margin:0 0 10px 0;
+}
+.calendar-sync-status{
+  font-size:11px;
+  color:var(--color-text-muted);
+  padding:4px 8px;
+  border:1px solid var(--color-border);
+  border-radius:999px;
+  background:var(--color-surface-2);
+}
+@media (max-width: 760px){
+  .calendar-toolbar{
+    align-items:stretch;
+  }
+  .calendar-toolbar-left,
+  .calendar-toolbar-right{
+    width:100%;
+    justify-content:space-between;
+  }
+  .calendar-toolbar-center{
+    order:-1;
+    width:100%;
+  }
+  .calendar-mode-toggle{
+    width:100%;
+    justify-content:space-between;
+  }
+  .calendar-mode-btn{
+    flex:1;
+  }
+  .calendar-grid.week-view{
+    grid-template-columns:repeat(7,minmax(120px,1fr));
   }
 }
 </style>
