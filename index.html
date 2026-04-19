@@ -10,7 +10,7 @@
 
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>GTD Pro Planner (v75.2)</title>
+<title>GTD Pro Planner (v75.3)</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300..700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
@@ -579,6 +579,23 @@ input,textarea,select{font:inherit;color:inherit}
 .calendar-pill.dragging,
 .calendar-agenda-item.dragging{
   opacity: 0.55;
+}
+
+.task-card,
+.priority-card,
+.calendar-pill,
+.calendar-agenda-item {
+  -webkit-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+@media (pointer: coarse) {
+  .task-card,
+  .priority-card,
+  .calendar-pill,
+  .calendar-agenda-item {
+    touch-action: pan-y;
+  }
 }
 </style>
 
@@ -3165,7 +3182,7 @@ function exportBackup() {
     const backupData = {
         exportedAt: new Date().toISOString(),
         exportedBy: (currentUser && currentUser.email) ? currentUser.email : 'unknown',
-        version: 'gtd-planner-v75.2',
+        version: 'gtd-planner-v75.3',
         state: state
     };
     const json = JSON.stringify(backupData, null, 2);
@@ -3324,7 +3341,7 @@ function generatePrintHTML() {
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="GTD Planner">
 
-        <title>GTD Pro Planner (v75.2)</title>
+        <title>GTD Pro Planner (v75.3)</title>
         <style>
             body { font-family: 'Inter', sans-serif; padding: 40px; max-width: 800px; margin: 0 auto; color: #333; line-height: 1.5; }
             @media print { body { padding: 0; } }
