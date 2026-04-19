@@ -10,7 +10,7 @@
 
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>GTD Pro Planner (v75.3)</title>
+<title>GTD Pro Planner (v75.4)</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300..700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
@@ -594,6 +594,57 @@ input,textarea,select{font:inherit;color:inherit}
   .priority-card,
   .calendar-pill,
   .calendar-agenda-item {
+    touch-action: pan-y;
+  }
+}
+
+html, body {
+  overscroll-behavior: none;
+}
+.app {
+  min-height: 100dvh;
+}
+.sidebar {
+  will-change: transform;
+}
+.menu-btn {
+  position: relative;
+  z-index: 2105;
+}
+@media (max-width: 768px) {
+  .topbar {
+    position: sticky;
+    top: 0;
+    z-index: 2100;
+  }
+  .sidebar {
+    background: var(--color-surface);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .main {
+    min-height: 0;
+    overflow: hidden;
+  }
+  #view-list,
+  #view-flow,
+  #view-priority,
+  #view-calendar {
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .tasks-grid {
+    gap: 10px;
+  }
+  .task-card,
+  .priority-card,
+  .calendar-pill,
+  .calendar-agenda-item {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+  }
+  .task-card {
     touch-action: pan-y;
   }
 }
@@ -1240,6 +1291,7 @@ input,textarea,select{font:inherit;color:inherit}
       }
 
       updateStats(); renderSidebar(); renderList();
+      if (isMobileLayout()) setTimeout(closeSidebar, 80);
       if (flowRoot && flowSvg && !isFlowActive) {
          // Only try to zoom if we stay in Flow View
          if (navId === 'all') zoomToNode(flowRoot);
@@ -1850,6 +1902,10 @@ function sortTasksForDisplay(tasks, catId, sourceType = 'active') {
                  animation: 150,
                  ghostClass: 'sortable-ghost',
                  group: 'tasks',
+                 delay: getSortableTouchOptions().delay,
+                 delayOnTouchOnly: getSortableTouchOptions().delayOnTouchOnly,
+                 touchStartThreshold: getSortableTouchOptions().touchStartThreshold,
+                 fallbackTolerance: getSortableTouchOptions().fallbackTolerance,
                  onEnd: function(evt) {
                      if (!document.body.contains(evt.item)) return;
                      if (window.isSidebarDrop) {
@@ -2646,6 +2702,7 @@ function buildTasksByDate(){
 }
 
 function handleCalendarTaskDragStart(event, taskId){
+  if (isMobileLayout()) { event.preventDefault(); return false; }
   const task = getCalendarTasks().find(t => t.id === taskId);
   if (!task) return;
   event.dataTransfer.effectAllowed = 'move';
@@ -2761,7 +2818,7 @@ function renderCalendar(){
           </div>
           <div class="calendar-cell-tasks">
             ${dayTasks.length ? dayTasks.map(t => `
-              <div class="calendar-pill ${t.priority || ''}" draggable="true" ondragstart="handleCalendarTaskDragStart(event, '${t.id}')" ondragend="handleCalendarTaskDragEnd(event)" onclick="event.stopPropagation()" title="${escapeHtml(t.title)}">${escapeHtml(t.title)}</div>
+              <div class="calendar-pill ${t.priority || ''}" draggable="${isMobileLayout() ? 'false' : 'true'}" ondragstart="handleCalendarTaskDragStart(event, '${t.id}')" ondragend="handleCalendarTaskDragEnd(event)" onclick="event.stopPropagation()" title="${escapeHtml(t.title)}">${escapeHtml(t.title)}</div>
             `).join('') : `<div class="calendar-more">Drop tasks here</div>`}
           </div>
         </div>
@@ -2795,7 +2852,7 @@ function renderCalendar(){
           </div>
           <div class="calendar-cell-tasks">
             ${dayTasks.slice(0,3).map(t => `
-              <div class="calendar-pill ${t.priority || ''}" draggable="true" ondragstart="handleCalendarTaskDragStart(event, '${t.id}')" ondragend="handleCalendarTaskDragEnd(event)" onclick="event.stopPropagation()" title="${escapeHtml(t.title)}">${escapeHtml(t.title)}</div>
+              <div class="calendar-pill ${t.priority || ''}" draggable="${isMobileLayout() ? 'false' : 'true'}" ondragstart="handleCalendarTaskDragStart(event, '${t.id}')" ondragend="handleCalendarTaskDragEnd(event)" onclick="event.stopPropagation()" title="${escapeHtml(t.title)}">${escapeHtml(t.title)}</div>
             `).join('')}
             ${dayTasks.length > 3 ? `<div class="calendar-more">+${dayTasks.length - 3} more</div>` : (dayTasks.length ? '' : `<div class="calendar-more">Drop tasks here</div>`)}
           </div>
@@ -2813,7 +2870,7 @@ function renderCalendar(){
   document.getElementById('calendar-day-list').innerHTML =
     selectedTasks.length
       ? `<div class="calendar-agenda-section-title">Selected Day</div>` + selectedTasks.map(t => `
-          <div class="calendar-agenda-item" draggable="true" ondragstart="handleCalendarTaskDragStart(event, '${t.id}')" ondragend="handleCalendarTaskDragEnd(event)">
+          <div class="calendar-agenda-item" draggable="${isMobileLayout() ? 'false' : 'true'}" ondragstart="handleCalendarTaskDragStart(event, '${t.id}')" ondragend="handleCalendarTaskDragEnd(event)">
             <div class="calendar-agenda-title">${escapeHtml(t.title)}</div>
             <div class="calendar-agenda-meta">${escapeHtml(t.catName)} · ${t.time || 0} min${t.priority ? ` · ${String(t.priority).toUpperCase()}` : ''}</div>
           </div>
@@ -2824,7 +2881,7 @@ function renderCalendar(){
   document.getElementById('calendar-undated-list').innerHTML =
     undated.length
       ? undated.map(t => `
-          <div class="calendar-agenda-item" draggable="true" ondragstart="handleCalendarTaskDragStart(event, '${t.id}')" ondragend="handleCalendarTaskDragEnd(event)">
+          <div class="calendar-agenda-item" draggable="${isMobileLayout() ? 'false' : 'true'}" ondragstart="handleCalendarTaskDragStart(event, '${t.id}')" ondragend="handleCalendarTaskDragEnd(event)">
             <div class="calendar-agenda-title">${escapeHtml(t.title)}</div>
             <div class="calendar-agenda-meta">${t.time || 0} min${t.priority ? ` · ${String(t.priority).toUpperCase()}` : ''}</div>
           </div>
@@ -2859,9 +2916,67 @@ function switchView(viewName, fromFlowClick = false) {
       if(viewName === 'list') renderList();
       if(viewName === 'priority') renderPriorityView();
       if(viewName === 'calendar') renderCalendar();
+      if (isMobileLayout()) setTimeout(closeSidebar, 80);
     }
 
-    const LOCAL_STATE_KEY = 'gtd-planner-v75-state';
+    
+function isMobileLayout() {
+  return window.innerWidth <= 768;
+}
+
+function getAppShell() {
+  return document.querySelector('.app');
+}
+
+function openSidebar() {
+  const app = getAppShell();
+  const overlay = document.getElementById('mobile-overlay');
+  if (!app || !isMobileLayout()) return;
+  app.classList.add('sidebar-open');
+  if (overlay) overlay.classList.add('active');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeSidebar() {
+  const app = getAppShell();
+  const overlay = document.getElementById('mobile-overlay');
+  if (!app) return;
+  app.classList.remove('sidebar-open');
+  if (overlay) overlay.classList.remove('active');
+  document.body.style.overflow = '';
+}
+
+function toggleSidebar() {
+  if (!isMobileLayout()) return;
+  const app = getAppShell();
+  if (!app) return;
+  if (app.classList.contains('sidebar-open')) closeSidebar();
+  else openSidebar();
+}
+
+function setupMobileSidebar() {
+  const overlay = document.getElementById('mobile-overlay');
+  if (overlay && !overlay.dataset.bound) {
+    overlay.dataset.bound = '1';
+    overlay.addEventListener('click', closeSidebar);
+  }
+
+  document.querySelectorAll('.sidebar .nav-item').forEach(el => {
+    if (el.dataset.mobileBound) return;
+    el.dataset.mobileBound = '1';
+    el.addEventListener('click', () => {
+      if (isMobileLayout()) setTimeout(closeSidebar, 80);
+    });
+  });
+}
+
+function getSortableTouchOptions() {
+  return isMobileLayout()
+    ? { delay: 220, delayOnTouchOnly: true, touchStartThreshold: 8, fallbackTolerance: 8 }
+    : { delay: 0, delayOnTouchOnly: false, touchStartThreshold: 0, fallbackTolerance: 0 };
+}
+
+const LOCAL_STATE_KEY = 'gtd-planner-v75-state';
 const LOCAL_MODE_KEY = 'gtd-planner-v75-mode';
 let saveTimer = null;
 let unsubscribeUserDoc = null;
@@ -2983,6 +3098,8 @@ function updateAll(options = {}) {
         if (typeof renderCalendar === 'function') renderCalendar();
     }
 
+    if (typeof setupMobileSidebar === 'function') setupMobileSidebar();
+
     if (options.skipSave) return;
 
     // INSTANT LOCAL SAVE (Sync)
@@ -3006,6 +3123,7 @@ document.addEventListener('DOMContentLoaded', () => {
     guestMode = isGuestMode();
     updateAll({ skipSave: true });
     updateSessionUi();
+    setupMobileSidebar();
     if (guestMode) setSyncStatus('offline');
 });
 
@@ -3182,7 +3300,7 @@ function exportBackup() {
     const backupData = {
         exportedAt: new Date().toISOString(),
         exportedBy: (currentUser && currentUser.email) ? currentUser.email : 'unknown',
-        version: 'gtd-planner-v75.3',
+        version: 'gtd-planner-v75.4',
         state: state
     };
     const json = JSON.stringify(backupData, null, 2);
@@ -3341,7 +3459,7 @@ function generatePrintHTML() {
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="GTD Planner">
 
-        <title>GTD Pro Planner (v75.3)</title>
+        <title>GTD Pro Planner (v75.4)</title>
         <style>
             body { font-family: 'Inter', sans-serif; padding: 40px; max-width: 800px; margin: 0 auto; color: #333; line-height: 1.5; }
             @media print { body { padding: 0; } }
