@@ -10,7 +10,7 @@
 
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>GTD Pro Planner (v75.5)</title>
+<title>GTD Pro Planner (v75.6)</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300..700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
@@ -886,7 +886,7 @@ html, body {
             <div id="calendar-day-list"></div>
 
             <div style="margin-top:var(--space-4);">
-              <div class="sidebar-section-label">Undated Scheduled</div>
+              <div class="sidebar-section-label">No Deadline</div>
               <div id="calendar-undated-list"></div>
             </div>
           </aside>
@@ -2668,8 +2668,15 @@ function getTasksForDate(dateKey){
 }
 
 function getUndatedScheduledTasks(){
-  const scheduled = state.categories.find(c => c.id === 'scheduled');
-  return (scheduled?.tasks || []).filter(t => !t.dueDate);
+  return state.categories
+    .filter(c => c.id !== 'projects')
+    .flatMap(c => (c.tasks || []).map(t => ({ ...t, catId: c.id, catName: c.name })))
+    .filter(t => !t.done && !t.dueDate)
+    .sort((a,b) =>
+      priorityWeight(a.priority) - priorityWeight(b.priority) ||
+      (a.time || 0) - (b.time || 0) ||
+      (a.title || '').localeCompare(b.title || '')
+    );
 }
 
 function setCalendarMode(mode){
@@ -3094,6 +3101,7 @@ function loadLocalBackup() {
         if(!parsed || !parsed.state) return false;
 
         state = migrateStateSchema(parsed.state);
+        lastLocalSaveAt = Number(parsed.savedAt) || 0;
         if(Array.isArray(parsed.versionHistory)) {
             versionHistoryCache = parsed.versionHistory;
         }
@@ -3101,6 +3109,18 @@ function loadLocalBackup() {
     } catch(e) {
         console.error("Local load failed", e);
         return false;
+    }
+}
+
+function flushPendingSaves() {
+    try {
+        saveLocalData();
+        clearTimeout(saveTimer);
+        if (currentUser && !guestMode && typeof saveUserData === 'function') {
+            saveUserData();
+        }
+    } catch (e) {
+        console.error('Flush save failed', e);
     }
 }
 
@@ -3147,9 +3167,11 @@ document.addEventListener('DOMContentLoaded', () => {
     if (guestMode) setSyncStatus('offline');
 });
 
-// Rescue local save on close
-window.addEventListener('beforeunload', () => {
-    saveLocalData();
+// Rescue local + cloud save on close/background
+window.addEventListener('beforeunload', flushPendingSaves);
+window.addEventListener('pagehide', flushPendingSaves);
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') flushPendingSaves();
 });
 
     // Fallback if DOMContentLoaded already fired
@@ -3261,6 +3283,9 @@ function loadUserData(uid) {
         const cloudTime = payload.lastUpdated ? (typeof payload.lastUpdated.toMillis === 'function' ? payload.lastUpdated.toMillis() : new Date(payload.lastUpdated).getTime()) : 0;
 
         if (lastLocalSaveAt && lastLocalSaveAt > cloudTime) {
+            setSyncStatus('syncing');
+            if(typeof updateAll === 'function') updateAll({ skipSave: true });
+            saveUserData();
             return;
         }
 
@@ -3320,7 +3345,7 @@ function exportBackup() {
     const backupData = {
         exportedAt: new Date().toISOString(),
         exportedBy: (currentUser && currentUser.email) ? currentUser.email : 'unknown',
-        version: 'gtd-planner-v75.5',
+        version: 'gtd-planner-v75.6',
         state: state
     };
     const json = JSON.stringify(backupData, null, 2);
@@ -3479,7 +3504,7 @@ function generatePrintHTML() {
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="GTD Planner">
 
-        <title>GTD Pro Planner (v75.5)</title>
+        <title>GTD Pro Planner (v75.6)</title>
         <style>
             body { font-family: 'Inter', sans-serif; padding: 40px; max-width: 800px; margin: 0 auto; color: #333; line-height: 1.5; }
             @media print { body { padding: 0; } }
