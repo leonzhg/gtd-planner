@@ -10,7 +10,7 @@
 
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>GTD Pro Planner (v75.7)</title>
+<title>GTD Pro Planner (v75.8)</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300..700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
@@ -648,6 +648,37 @@ html, body {
     touch-action: pan-y;
   }
 }
+
+.nav-item {
+  min-width: 0;
+}
+.nav-item .nav-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sidebar-project-row {
+  display:flex;
+  align-items:center;
+  gap:4px;
+  margin-bottom:2px;
+  min-width:0;
+}
+.sidebar-project-btn {
+  flex:1;
+  min-width:0;
+  padding-right:4px;
+}
+.sidebar-project-btn .project-title {
+  min-width:0;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.nav-item i, .section-title i {
+  flex-shrink:0;
+}
 </style>
 
 
@@ -774,9 +805,9 @@ html, body {
             <div class="stat-sub">Across all lists</div>
           </div>
           <div class="stat-card">
-            <div class="stat-label">Completed</div>
+            <div class="stat-label">Completed This Month</div>
             <div class="stat-value" id="stat-done">0</div>
-            <div class="stat-sub">Good job!</div>
+            <div class="stat-sub">Includes archived completed tasks</div>
           </div>
           <div class="stat-card">
             <div class="stat-label">Est. Time</div>
@@ -1209,6 +1240,7 @@ html, body {
                 if (task.projectId === projId) delete task.projectId;
             });
         });
+        if (state.activeNav === 'project-' + projId) state.activeNav = 'all';
         updateAll();
     }
 
@@ -1222,6 +1254,7 @@ html, body {
             const proj = projCat.tasks.find(p => p.id === editingProjectId);
             if (proj) {
                 proj.title = title;
+                proj.updatedAt = new Date().toISOString();
             }
         } else {
             projCat.tasks.push({
@@ -1229,11 +1262,15 @@ html, body {
                 title: title,
                 priority: "q2",
                 tags: ["Project"],
-                done: false
+                done: false,
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString()
             });
         }
 
         closeModal('project-modal');
+        editingProjectId = null;
+        document.getElementById('project-title-input').value = '';
         updateAll();
     }
 
@@ -1444,8 +1481,10 @@ html, body {
       const taskIndex = cat.tasks.findIndex(t => t.id === taskId);
       const task = cat.tasks[taskIndex];
       task.done = !task.done;
+      task.updatedAt = new Date().toISOString();
+      if (task.done) task.completedAt = new Date().toISOString();
+      else delete task.completedAt;
 
-      // Auto move to bottom if checked
       if (task.done) {
           cat.tasks.splice(taskIndex, 1);
           cat.tasks.push(task);
@@ -1511,17 +1550,35 @@ html, body {
   if (!state || !Array.isArray(state.categories)) return;
 
   const nonProjectCats = state.categories.filter(c => c.id !== 'projects');
-  const allTasks = nonProjectCats.flatMap(c => c.tasks || []);
+  const activeTasks = nonProjectCats.flatMap(c => c.tasks || []);
+  const archivedTasks = Array.isArray(state.archive) ? state.archive : [];
 
-  const total = allTasks.length;
-  const done = allTasks.filter(t => t.done).length;
-  const remaining = allTasks.filter(t => !t.done);
+  const total = activeTasks.length;
 
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth();
+  const completedThisMonthActive = activeTasks.filter(t => {
+    if (!t.done) return false;
+    const dateVal = t.completedAt || t.updatedAt || t.archivedAt;
+    if (!dateVal) return false;
+    const d = new Date(dateVal);
+    return !isNaN(d) && d.getFullYear() === currentYear && d.getMonth() === currentMonth;
+  }).length;
+  const completedThisMonthArchived = archivedTasks.filter(t => {
+    if (!t.done) return false;
+    const dateVal = t.completedAt || t.archivedAt;
+    if (!dateVal) return false;
+    const d = new Date(dateVal);
+    return !isNaN(d) && d.getFullYear() === currentYear && d.getMonth() === currentMonth;
+  }).length;
+  const done = completedThisMonthActive + completedThisMonthArchived;
+
+  const remaining = activeTasks.filter(t => !t.done);
   const remainingMinutes = remaining.reduce((sum, t) => {
     const val = Number(t.time);
     return sum + (Number.isFinite(val) && val > 0 ? val : 0);
   }, 0);
-
   const remainingHours = remainingMinutes / 60;
 
   const totalEl = document.getElementById('stat-total');
@@ -1548,7 +1605,7 @@ function renderSidebar() {
       state.categories.forEach(cat => {
         const count = cat.tasks.filter(t => !t.done).length;
         html += `<button class="nav-item ${state.activeNav === cat.id ? 'active' : ''}" onclick="setNavFilter('${cat.id}')">
-            <div class="dot" style="background:${categoryColors[cat.id] || 'var(--color-primary)'}"></div>${cat.name}<div class="nav-count">${count}</div></button>`;
+            <div class="dot" style="background:${categoryColors[cat.id] || 'var(--color-primary)'}"></div><span class="nav-label">${cat.name}</span><div class="nav-count">${count}</div></button>`;
       });
       target.innerHTML = html;
 
@@ -1556,17 +1613,17 @@ function renderSidebar() {
       let projHtml = '';
       const projects = state.categories.find(c => c.id === 'projects').tasks;
       projects.forEach(p => {
-         projHtml += `<div style="display:flex; align-items:center; gap:2px; margin-bottom:2px;">
-             <button class="nav-item ${state.activeNav === 'project-'+p.id ? 'active' : ''}" 
-             style="flex:1; padding-right:4px;"
+         projHtml += `<div class="sidebar-project-row">
+             <button class="nav-item sidebar-project-btn ${state.activeNav === 'project-'+p.id ? 'active' : ''}"
              onclick="setNavFilter('project-${p.id}')"
              ondragover="event.preventDefault(); this.style.background='var(--color-surface-dynamic)';"
              ondragleave="this.style.background='';"
              ondrop="window.isSidebarDrop = true; handleProjectDrop(event, '${p.id}'); this.style.background='';">
-             <i data-lucide="folder-tree" style="width:14px;height:14px;"></i> 
-             <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${p.title}</span>
+             <i data-lucide="folder-tree" style="width:14px;height:14px;"></i>
+             <span class="project-title">${p.title}</span>
              </button>
              <button class="action-btn" style="width:24px;height:24px;opacity:0.6;" onclick="quickEditProject('${p.id}')" title="Edit Project Name"><i data-lucide="edit-2" style="width:12px;height:12px;"></i></button>
+             <button class="action-btn" style="width:24px;height:24px;opacity:0.75;" onclick="deleteProject('${p.id}')" title="Delete Project"><i data-lucide="trash-2" style="width:12px;height:12px;color:var(--color-high);"></i></button>
              </div>`;
       });
       if (projects.length === 0) projHtml = `<div style="font-size:var(--text-xs); color:var(--color-text-faint); padding:var(--space-2);">No active projects. Drag tasks here!</div>`;
@@ -2034,6 +2091,7 @@ function sortTasksForDisplay(tasks, catId, sourceType = 'active') {
           task.priority = priority;
           task.dueDate = dueDate;
           task.projectId = projectId || undefined;
+          task.updatedAt = new Date().toISOString();
 
           if (oldCat.id !== newCatId) {
               oldCat.tasks.splice(taskIndex, 1);
@@ -2041,7 +2099,7 @@ function sortTasksForDisplay(tasks, catId, sourceType = 'active') {
           }
       } else {
           const cat = state.categories.find(c => c.id === newCatId);
-          const newTask = { id: "t" + Date.now(), title, time, priority, tags: [], done: false };
+          const newTask = { id: "t" + Date.now(), title, time, priority, tags: [], done: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
           if (dueDate) newTask.dueDate = dueDate;
           if (projectId) newTask.projectId = projectId;
           cat.tasks.push(newTask);
@@ -3371,7 +3429,7 @@ function exportBackup() {
     const backupData = {
         exportedAt: new Date().toISOString(),
         exportedBy: (currentUser && currentUser.email) ? currentUser.email : 'unknown',
-        version: 'gtd-planner-v75.7',
+        version: 'gtd-planner-v75.8',
         state: state
     };
     const json = JSON.stringify(backupData, null, 2);
@@ -3530,7 +3588,7 @@ function generatePrintHTML() {
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="GTD Planner">
 
-        <title>GTD Pro Planner (v75.7)</title>
+        <title>GTD Pro Planner (v75.8)</title>
         <style>
             body { font-family: 'Inter', sans-serif; padding: 40px; max-width: 800px; margin: 0 auto; color: #333; line-height: 1.5; }
             @media print { body { padding: 0; } }
