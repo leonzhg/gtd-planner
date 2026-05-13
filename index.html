@@ -10,7 +10,7 @@
 
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>GTD Pro Planner (v75.6)</title>
+<title>GTD Pro Planner (v75.7)</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300..700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
@@ -2910,10 +2910,10 @@ function renderCalendar(){
       ? undated.map(t => `
           <div class="calendar-agenda-item" draggable="${isMobileLayout() ? 'false' : 'true'}" ondragstart="handleCalendarTaskDragStart(event, '${t.id}')" ondragend="handleCalendarTaskDragEnd(event)">
             <div class="calendar-agenda-title">${escapeHtml(t.title)}</div>
-            <div class="calendar-agenda-meta">${t.time || 0} min${t.priority ? ` · ${String(t.priority).toUpperCase()}` : ''}</div>
+            <div class="calendar-agenda-meta">${escapeHtml(t.catName || 'Task')} · ${t.time || 0} min${t.priority ? ` · ${String(t.priority).toUpperCase()}` : ''}</div>
           </div>
         `).join('')
-      : `<div class="empty-state" style="font-size:12px; color:var(--color-text-muted);">No undated scheduled tasks.</div>`;
+      : `<div class="empty-state" style="font-size:12px; color:var(--color-text-muted);">No tasks without deadlines.</div>`;
 }
 // --- END CALENDAR VIEW HELPERS ---
 
@@ -3010,6 +3010,11 @@ let unsubscribeUserDoc = null;
 let lastLocalSaveAt = 0;
 let syncStatus = "synced";
 let guestMode = false;
+let cloudSyncInFlight = false;
+
+function computeStateFingerprint(value){
+  try { return JSON.stringify(value || null); } catch(e) { return ''; }
+}
 
 function isGuestMode(){
   try { return localStorage.getItem(LOCAL_MODE_KEY) === 'guest'; } catch(e) { return false; }
@@ -3282,33 +3287,49 @@ function loadUserData(uid) {
         const cloudHistory = Array.isArray(payload.versionHistory) ? payload.versionHistory : [];
         const cloudTime = payload.lastUpdated ? (typeof payload.lastUpdated.toMillis === 'function' ? payload.lastUpdated.toMillis() : new Date(payload.lastUpdated).getTime()) : 0;
 
-        if (lastLocalSaveAt && lastLocalSaveAt > cloudTime) {
-            setSyncStatus('syncing');
-            if(typeof updateAll === 'function') updateAll({ skipSave: true });
-            saveUserData();
-            return;
-        }
-
         if (!cloudState) return;
 
         const cloudVersion = cloudState.schemaVersion || 0;
+        let migratedCloudState;
+        let nextHistory;
         if (cloudVersion < CURRENT_SCHEMA_VERSION) {
-            versionHistoryCache = [{
+            nextHistory = [{
                 state: JSON.parse(JSON.stringify(cloudState)),
                 savedAtIso: new Date().toISOString(),
                 reason: `pre_migration_v${CURRENT_SCHEMA_VERSION}`,
                 schemaVersion: cloudVersion
             }, ...cloudHistory].slice(0, MAX_HISTORY_VERSIONS);
-            cloudState = migrateStateSchema(cloudState);
+            migratedCloudState = migrateStateSchema(cloudState);
         } else {
-            versionHistoryCache = cloudHistory;
-            cloudState = migrateStateSchema(cloudState);
+            nextHistory = cloudHistory;
+            migratedCloudState = migrateStateSchema(cloudState);
         }
 
-        state = cloudState;
+        const localFingerprint = computeStateFingerprint(state);
+        const cloudFingerprint = computeStateFingerprint(migratedCloudState);
+
+        if (cloudFingerprint && localFingerprint && cloudFingerprint === localFingerprint) {
+            versionHistoryCache = nextHistory;
+            cloudSyncInFlight = false;
+            setSyncStatus('synced');
+            return;
+        }
+
+        if (lastLocalSaveAt && lastLocalSaveAt > cloudTime) {
+            if (!cloudSyncInFlight) {
+                setSyncStatus('syncing');
+                saveUserData();
+            }
+            return;
+        }
+
+        versionHistoryCache = nextHistory;
+        state = migratedCloudState;
+        cloudSyncInFlight = false;
         setSyncStatus('synced');
         if(typeof updateAll === 'function') updateAll({ skipSave: true });
     }, (error) => {
+        cloudSyncInFlight = false;
         console.error("Error loading user data:", error);
         setSyncStatus('error');
     });
@@ -3322,14 +3343,19 @@ function saveUserData() {
         return Promise.resolve();
     }
     if (currentUser && typeof state !== 'undefined' && typeof db !== 'undefined') {
+        cloudSyncInFlight = true;
         setSyncStatus('syncing');
+        const payloadState = JSON.parse(JSON.stringify(state));
+        const payloadHistory = Array.isArray(versionHistoryCache) ? JSON.parse(JSON.stringify(versionHistoryCache)) : [];
         return db.collection('users').doc(currentUser.uid).set({
-            state: state,
-            versionHistory: Array.isArray(versionHistoryCache) ? versionHistoryCache : [],
+            state: payloadState,
+            versionHistory: payloadHistory,
             lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
         }, { merge: true }).then(() => {
+            cloudSyncInFlight = false;
             setSyncStatus('synced');
         }).catch((error) => {
+            cloudSyncInFlight = false;
             console.error("Error saving user data:", error);
             setSyncStatus('error');
         });
@@ -3345,7 +3371,7 @@ function exportBackup() {
     const backupData = {
         exportedAt: new Date().toISOString(),
         exportedBy: (currentUser && currentUser.email) ? currentUser.email : 'unknown',
-        version: 'gtd-planner-v75.6',
+        version: 'gtd-planner-v75.7',
         state: state
     };
     const json = JSON.stringify(backupData, null, 2);
@@ -3504,7 +3530,7 @@ function generatePrintHTML() {
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="GTD Planner">
 
-        <title>GTD Pro Planner (v75.6)</title>
+        <title>GTD Pro Planner (v75.7)</title>
         <style>
             body { font-family: 'Inter', sans-serif; padding: 40px; max-width: 800px; margin: 0 auto; color: #333; line-height: 1.5; }
             @media print { body { padding: 0; } }
